@@ -1,0 +1,24 @@
+{
+  "name": "sovclaw-wallet-isolate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Process-isolated WDK wallet with policy engine — runs on Bare Runtime",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "node --test dist/tests/**/*.test.js",
+    "clean": "rm -rf dist",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tetherto/wdk": "1.0.0-beta.5",
+    "@tetherto/wdk-wallet-btc": "1.0.0-beta.5",
+    "@tetherto/wdk-wallet-evm": "2.0.0-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "5.7.3",
+    "@types/node": "22.13.5"
+  }
+}

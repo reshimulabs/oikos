@@ -1,0 +1,17 @@
+{
+  "policies": [
+    {
+      "id": "demo-conservative",
+      "name": "Demo Conservative Policy",
+      "rules": [
+        { "type": "max_per_tx", "amount": "5000000", "symbol": "USDT" },
+        { "type": "max_per_session", "amount": "20000000", "symbol": "USDT" },
+        { "type": "max_per_day", "amount": "50000000", "symbol": "USDT" },
+        { "type": "max_per_recipient_per_day", "amount": "10000000", "symbol": "USDT" },
+        { "type": "cooldown_seconds", "seconds": 30 },
+        { "type": "require_confidence", "min": 0.7 },
+        { "type": "time_window", "start_hour": 8, "end_hour": 22, "timezone": "UTC" }
+      ]
+    }
+  ]
+}
