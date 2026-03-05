@@ -1,0 +1,115 @@
+/**
+ * Agent Brain — Entry Point
+ *
+ * Wires all components together:
+ * 1. Load configuration
+ * 2. Spawn wallet-isolate process (Bare Runtime)
+ * 3. Initialize LLM client (Ollama or cloud)
+ * 4. Start event source (mock or real)
+ * 5. Start agent brain (reasoning loop)
+ * 6. Start dashboard (localhost-only)
+ *
+ * @security The Brain NEVER touches seed phrases or private keys.
+ * It sends structured PaymentProposals and receives ExecutionResults.
+ */
+
+import { loadConfig } from './config/env.js';
+import { WalletIPCClient } from './ipc/client.js';
+import { AgentBrain } from './agent/brain.js';
+import { createLLMClient } from './llm/client.js';
+import { MockEventSource } from './events/mock.js';
+import { getDemoCreators, getDefaultCreator } from './creators/registry.js';
+import { createDashboard } from './dashboard/server.js';
+import { resolve } from 'path';
+
+async function main(): Promise<void> {
+  console.error('[sovclaw] Starting Agent Brain...');
+
+  // 1. Load configuration
+  const config = loadConfig();
+  console.error(`[sovclaw] LLM mode: ${config.llmMode} (mock: ${String(config.mockLlm)})`);
+  console.error(`[sovclaw] Events: ${config.mockEvents ? 'mock' : 'live'}`);
+
+  // 2. Spawn wallet-isolate
+  const wallet = new WalletIPCClient();
+  const walletPath = resolve(config.walletIsolatePath);
+
+  // Detect runtime — use 'node' for development, 'bare' for production
+  const runtime: 'bare' | 'node' = process.env['WALLET_RUNTIME'] === 'bare' ? 'bare' : 'node';
+  console.error(`[sovclaw] Spawning wallet-isolate (${runtime}): ${walletPath}`);
+
+  wallet.start(walletPath, runtime, {
+    MOCK_WALLET: config.mockWallet ? 'true' : 'false',
+    POLICY_FILE: config.policyFile,
+    AUDIT_LOG_PATH: config.auditLogPath,
+  });
+
+  wallet.onDisconnect((reason) => {
+    console.error(`[sovclaw] Wallet disconnected: ${reason ?? 'unknown'}`);
+  });
+
+  // Wait for wallet to initialize
+  await new Promise(resolve => setTimeout(resolve, 1000));
+
+  if (!wallet.isRunning()) {
+    console.error('[sovclaw] FATAL: Wallet isolate failed to start');
+    process.exit(1);
+  }
+
+  // 3. Initialize LLM client
+  const llmClient = config.mockLlm ? null : createLLMClient(config);
+  if (!config.mockLlm) {
+    console.error(`[sovclaw] LLM: ${config.llmBaseUrl} (model: ${config.llmModel})`);
+  }
+
+  // 4. Initialize agent brain
+  const brain = new AgentBrain(wallet, config, llmClient);
+
+  // Set up creator
+  const creators = getDemoCreators();
+  const defaultCreator = getDefaultCreator(creators, 'ethereum');
+  if (defaultCreator) {
+    brain.setCreator(defaultCreator.addresses['ethereum'] ?? '');
+    console.error(`[sovclaw] Creator: ${defaultCreator.name} (${defaultCreator.addresses['ethereum'] ?? 'unknown'})`);
+  }
+
+  // Initial wallet state refresh
+  await brain.refreshWalletState();
+  const state = brain.getState();
+  if (state.balances.length > 0) {
+    console.error(`[sovclaw] Balance: ${state.balances[0]?.formatted ?? 'unknown'}`);
+  }
+
+  // 5. Start event source
+  if (config.mockEvents) {
+    const eventSource = new MockEventSource();
+    eventSource.onEvents((events) => {
+      brain.handleEvents(events);
+    });
+    eventSource.start();
+  } else {
+    console.error('[sovclaw] Live events not yet implemented — using idle mode');
+  }
+
+  // 6. Start dashboard
+  createDashboard(brain, wallet, config.dashboardPort);
+
+  console.error('[sovclaw] Agent Brain ready.');
+  console.error(`[sovclaw] Dashboard: http://127.0.0.1:${config.dashboardPort}`);
+  console.error('[sovclaw] Press Ctrl+C to stop.');
+
+  // Graceful shutdown
+  const shutdown = (): void => {
+    console.error('[sovclaw] Shutting down...');
+    wallet.stop();
+    process.exit(0);
+  };
+
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+}
+
+main().catch((err: unknown) => {
+  console.error('[sovclaw] FATAL:', err);
+  process.exit(1);
+});

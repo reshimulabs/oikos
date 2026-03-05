@@ -37,12 +37,13 @@ import { WalletManager, MockWalletManager } from './wallet/manager.js';
 import type { WalletOperations } from './wallet/types.js';
 import { TESTNET_CHAINS } from './wallet/chains.js';
 import { DEMO } from './policies/presets.js';
-import * as fs from 'fs';
+import { readFileSync, appendFileSync } from './compat/fs.js';
+import { proc } from './compat/process.js';
 
 // ── Configuration ──
 
 function getEnv(key: string, fallback?: string): string {
-  const value = process.env[key];
+  const value = proc.env[key];
   if (value !== undefined && value !== '') return value;
   if (fallback !== undefined) return fallback;
   throw new Error(`Missing required environment variable: ${key}`);
@@ -56,7 +57,7 @@ function loadPolicies(): PolicyConfig {
   }
 
   try {
-    const raw = fs.readFileSync(policyFile, 'utf-8');
+    const raw = readFileSync(policyFile, 'utf-8');
     return JSON.parse(raw) as PolicyConfig;
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -72,7 +73,7 @@ function createAuditAppender(): (line: string) => void {
   const auditPath = getEnv('AUDIT_LOG_PATH', 'audit.jsonl');
   return (line: string) => {
     try {
-      fs.appendFileSync(auditPath, line + '\n');
+      appendFileSync(auditPath, line + '\n');
     } catch {
       // If we can't write audit, log to stderr but don't crash
       console.error(`[wallet-isolate] AUDIT WRITE FAILED: ${line}`);
@@ -201,7 +202,7 @@ async function main(): Promise<void> {
 
   // 5. Set up IPC
   const responder = new IPCResponder((data: string) => {
-    process.stdout.write(data);
+    proc.stdout.write(data);
   });
 
   const listener = new IPCListener(
@@ -214,29 +215,29 @@ async function main(): Promise<void> {
   );
 
   // 6. Read stdin
-  process.stdin.setEncoding('utf-8');
-  process.stdin.on('data', (chunk: string) => {
+  proc.stdin.setEncoding('utf-8');
+  proc.stdin.on('data', (chunk: string) => {
     listener.feed(chunk);
   });
 
-  process.stdin.on('end', () => {
+  proc.stdin.on('end', () => {
     console.error('[wallet-isolate] stdin closed, shutting down');
-    process.exit(0);
+    proc.exit(0);
   });
 
   // 7. Graceful shutdown
   const shutdown = (): void => {
     console.error('[wallet-isolate] Shutting down...');
-    process.exit(0);
+    proc.exit(0);
   };
 
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  proc.on('SIGTERM', shutdown);
+  proc.on('SIGINT', shutdown);
 
   console.error('[wallet-isolate] Ready. Listening for IPC messages on stdin.');
 }
 
 main().catch((err: unknown) => {
   console.error('[wallet-isolate] FATAL:', err);
-  process.exit(1);
+  proc.exit(1);
 });

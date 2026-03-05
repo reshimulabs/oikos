@@ -111,12 +111,23 @@ export class PolicyEngine {
 
   /** Get current policy status for IPC query responses. */
   getStatus(): Array<{ id: string; name: string; state: Record<string, unknown> }> {
+    // Convert BigInt values to strings for JSON serialization
+    const sessionTotals: Record<string, string> = {};
+    for (const [key, val] of this.state.sessionTotalBySymbol) {
+      sessionTotals[key] = val.toString();
+    }
+
+    const dayTotals: Record<string, string> = {};
+    for (const [key, val] of this.state.dayTotalBySymbol) {
+      dayTotals[key] = val.toString();
+    }
+
     return this.policies.map(p => ({
       id: p.id,
       name: p.name,
       state: {
-        sessionTotals: Object.fromEntries(this.state.sessionTotalBySymbol),
-        dayTotals: Object.fromEntries(this.state.dayTotalBySymbol),
+        sessionTotals,
+        dayTotals,
         lastTransactionTime: this.state.lastTransactionTime,
         currentDay: this.state.currentDay
       }

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SovClaw Dashboard</title>
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --card: #12121a;
+      --border: #1e1e2e;
+      --text: #e0e0e8;
+      --muted: #6b6b80;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --blue: #3b82f6;
+      --purple: #a855f7;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 1rem; color: var(--purple); }
+    h2 { font-size: 1rem; margin-bottom: 0.5rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+    .card.full { grid-column: 1 / -1; }
+    .stat { font-size: 2rem; font-weight: bold; margin: 0.5rem 0; }
+    .stat.green { color: var(--green); }
+    .stat.red { color: var(--red); }
+    .stat.yellow { color: var(--yellow); }
+    .stat.blue { color: var(--blue); }
+    .label { color: var(--muted); font-size: 0.75rem; }
+    .status-badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .status-idle { background: #1e1e2e; color: var(--muted); }
+    .status-reasoning { background: #1e1b4b; color: var(--purple); }
+    .status-proposing { background: #172554; color: var(--blue); }
+    .reasoning-box {
+      background: #0f0f17;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.75rem;
+      margin-top: 0.5rem;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      max-height: 200px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .tx-list { list-style: none; max-height: 300px; overflow-y: auto; }
+    .tx-item {
+      padding: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8rem;
+    }
+    .tx-item:last-child { border-bottom: none; }
+    .tx-executed { border-left: 3px solid var(--green); }
+    .tx-rejected { border-left: 3px solid var(--red); }
+    .tx-failed { border-left: 3px solid var(--yellow); }
+    .balance-row { display: flex; justify-content: space-between; padding: 0.3rem 0; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+    .connected { color: var(--green); }
+    .disconnected { color: var(--red); }
+    .arch-note { font-size: 0.7rem; color: var(--muted); margin-top: 0.5rem; }
+    .policy-rule { font-size: 0.75rem; padding: 0.2rem 0; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>SovClaw Dashboard</h1>
+    <div>
+      <span id="wallet-status" class="disconnected">WALLET: --</span>
+      &nbsp;|&nbsp;
+      <span id="brain-status" class="status-badge status-idle">IDLE</span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Wallet Balance</h2>
+      <div id="balances">
+        <div class="balance-row"><span>Loading...</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Agent Stats</h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+        <div><span class="label">Events Seen</span><div class="stat blue" id="events-seen">0</div></div>
+        <div><span class="label">Proposals Sent</span><div class="stat" id="proposals-sent">0</div></div>
+        <div><span class="label">Approved</span><div class="stat green" id="approved">0</div></div>
+        <div><span class="label">Rejected</span><div class="stat red" id="rejected">0</div></div>
+      </div>
+    </div>
+
+    <div class="card full">
+      <h2>Agent Reasoning</h2>
+      <div><span class="label">Last Decision:</span> <span id="last-decision">--</span></div>
+      <div class="reasoning-box" id="reasoning">Waiting for events...</div>
+    </div>
+
+    <div class="card">
+      <h2>Recent Transactions</h2>
+      <ul class="tx-list" id="tx-list">
+        <li class="tx-item">No transactions yet</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Policy Status</h2>
+      <div id="policy-status">Loading...</div>
+    </div>
+  </div>
+
+  <div class="arch-note">
+    SovClaw: Process-isolated AI agent wallet.
+    Brain (Node.js) proposes payments via IPC.
+    Wallet (Bare Runtime) enforces policies and signs.
+    The brain NEVER touches private keys.
+  </div>
+
+  <script>
+    async function fetchJSON(url) {
+      try {
+        const res = await fetch(url);
+        return await res.json();
+      } catch { return null; }
+    }
+
+    async function update() {
+      // State
+      const state = await fetchJSON('/api/state');
+      if (state) {
+        document.getElementById('brain-status').textContent = state.status.toUpperCase();
+        document.getElementById('brain-status').className = 'status-badge status-' + state.status;
+        document.getElementById('events-seen').textContent = state.eventsSeen;
+        document.getElementById('proposals-sent').textContent = state.proposalsSent;
+        document.getElementById('approved').textContent = state.proposalsApproved;
+        document.getElementById('rejected').textContent = state.proposalsRejected;
+        document.getElementById('reasoning').textContent = state.lastReasoning || 'Waiting for events...';
+        document.getElementById('last-decision').textContent = state.lastDecision;
+
+        // Balances
+        if (state.balances && state.balances.length > 0) {
+          document.getElementById('balances').innerHTML = state.balances
+            .map(b => '<div class="balance-row"><span>' + b.symbol + ' (' + b.chain + ')</span><span>' + b.formatted + '</span></div>')
+            .join('');
+        }
+
+        // Transactions
+        if (state.recentResults && state.recentResults.length > 0) {
+          document.getElementById('tx-list').innerHTML = state.recentResults
+            .map(r => {
+              const cls = 'tx-' + r.status;
+              const amount = r.proposal ? (parseInt(r.proposal.amount) / 1000000).toFixed(2) : '?';
+              const hash = r.txHash ? r.txHash.slice(0, 16) + '...' : '';
+              const violations = r.violations && r.violations.length > 0 ? ' | ' + r.violations[0] : '';
+              return '<li class="tx-item ' + cls + '">'
+                + '<strong>' + r.status.toUpperCase() + '</strong> '
+                + amount + ' ' + (r.proposal ? r.proposal.symbol : '')
+                + (hash ? ' | tx: ' + hash : '')
+                + violations
+                + '</li>';
+            }).join('');
+        }
+      }
+
+      // Health
+      const health = await fetchJSON('/api/health');
+      if (health) {
+        const walletEl = document.getElementById('wallet-status');
+        walletEl.textContent = 'WALLET: ' + (health.walletConnected ? 'CONNECTED' : 'DISCONNECTED');
+        walletEl.className = health.walletConnected ? 'connected' : 'disconnected';
+      }
+
+      // Policies
+      const policies = await fetchJSON('/api/policies');
+      if (policies && policies.policies) {
+        document.getElementById('policy-status').innerHTML = policies.policies
+          .map(p => {
+            const session = Object.entries(p.state.sessionTotals || {})
+              .map(([k, v]) => k + ': ' + v)
+              .join(', ');
+            return '<div><strong>' + p.name + '</strong>'
+              + '<div class="policy-rule">Session spent: ' + (session || 'none') + '</div>'
+              + '<div class="policy-rule">Day: ' + p.state.currentDay + '</div>'
+              + '</div>';
+          }).join('');
+      }
+    }
+
+    // Poll every 2 seconds
+    setInterval(update, 2000);
+    update();
+  </script>
+</body>
+</html>
