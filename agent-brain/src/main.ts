@@ -82,6 +82,12 @@ async function main(): Promise<void> {
     console.error(`[oikos] Balance: ${state.balances[0]?.formatted ?? 'unknown'}`);
   }
 
+  // 4b. Bootstrap ERC-8004 identity (if enabled)
+  if (config.erc8004Enabled) {
+    await brain.bootstrapIdentity(config.dashboardPort);
+    console.error(`[oikos] ERC-8004: ${brain.getIdentityState().registered ? 'registered' : 'disabled'}`);
+  }
+
   // 5. Start event source
   if (config.mockEvents) {
     const eventSource = new MockEventSource();

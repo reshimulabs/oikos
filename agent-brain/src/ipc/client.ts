@@ -17,6 +17,7 @@ import type {
   SwapProposal,
   BridgeProposal,
   YieldProposal,
+  FeedbackProposal,
   ProposalCommon,
   ProposalSource,
   BalanceQuery,
@@ -26,6 +27,11 @@ import type {
   BalanceResponse,
   AddressResponse,
   PolicyStatus,
+  IdentityRegisterRequest,
+  IdentitySetWalletRequest,
+  ReputationQuery,
+  IdentityResult,
+  ReputationResult,
 } from './types.js';
 
 /** Pending request waiting for a response */
@@ -164,7 +170,7 @@ export class WalletIPCClient {
    */
   async proposalFromExternal(
     source: ProposalSource,
-    type: 'payment' | 'swap' | 'bridge' | 'yield',
+    type: 'payment' | 'swap' | 'bridge' | 'yield' | 'feedback',
     proposal: ProposalCommon
   ): Promise<ExecutionResult> {
     switch (type) {
@@ -176,6 +182,8 @@ export class WalletIPCClient {
         return this.proposeBridge(proposal as BridgeProposal, source);
       case 'yield':
         return this.proposeYield(proposal as YieldProposal, source);
+      case 'feedback':
+        return this.proposeFeedback(proposal as FeedbackProposal, source);
     }
   }
 
@@ -214,6 +222,35 @@ export class WalletIPCClient {
     const response = await this.send('query_audit', query);
     const payload = response.payload as { entries: unknown[] };
     return payload.entries;
+  }
+
+  // ── ERC-8004 Identity & Reputation ──
+
+  /** Register an on-chain ERC-8004 identity (mints ERC-721 NFT). */
+  async registerIdentity(agentURI: string, chain = 'ethereum' as const): Promise<IdentityResult> {
+    const payload: IdentityRegisterRequest = { agentURI, chain };
+    const response = await this.send('identity_register', payload);
+    return response.payload as IdentityResult;
+  }
+
+  /** Set the agent's wallet address on the IdentityRegistry (EIP-712 signed). */
+  async setAgentWallet(agentId: string, deadline: number, chain = 'ethereum' as const): Promise<IdentityResult> {
+    const payload: IdentitySetWalletRequest = { agentId, deadline, chain };
+    const response = await this.send('identity_set_wallet', payload);
+    return response.payload as IdentityResult;
+  }
+
+  /** Submit on-chain reputation feedback for a peer agent. */
+  async proposeFeedback(proposal: FeedbackProposal, source?: ProposalSource): Promise<ExecutionResult> {
+    const response = await this.send('propose_feedback', proposal, source);
+    return response.payload as ExecutionResult;
+  }
+
+  /** Query on-chain reputation from ERC-8004 ReputationRegistry. */
+  async queryReputation(agentId: string, chain = 'ethereum' as const): Promise<ReputationResult> {
+    const payload: ReputationQuery = { agentId, chain };
+    const response = await this.send('query_reputation', payload);
+    return response.payload as ReputationResult;
   }
 
   // ── Internal ──

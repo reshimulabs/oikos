@@ -98,6 +98,48 @@ export function createDashboard(
     res.json({ enabled: true, economics: state.economics });
   });
 
+  // ── ERC-8004 Identity & Reputation ──
+
+  /** ERC-8004 Agent Card (Registration File) — follows EIP-8004 schema */
+  app.get('/agent-card.json', (_req, res) => {
+    const identity = brain.getIdentityState();
+    res.json({
+      type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+      name: 'Oikos Agent',
+      description: 'Autonomous AI agent with process-isolated multi-chain wallet. Supports portfolio management, DeFi operations, P2P swarm trading, and on-chain reputation via ERC-8004.',
+      services: [
+        { name: 'MCP', endpoint: `http://127.0.0.1:${port}/mcp`, version: '2025-06-18' },
+        { name: 'web', endpoint: `http://127.0.0.1:${port}/` },
+      ],
+      x402Support: true,
+      active: true,
+      registrations: identity.agentId
+        ? [{ agentId: Number(identity.agentId), agentRegistry: `eip155:11155111:0x8004A818BFB912233c491871b3d84c89A494BD9e` }]
+        : [],
+      supportedTrust: ['reputation'],
+    });
+  });
+
+  /** ERC-8004 identity state */
+  app.get('/api/identity', (_req, res) => {
+    res.json(brain.getIdentityState());
+  });
+
+  /** ERC-8004 on-chain reputation */
+  app.get('/api/reputation/onchain', async (_req, res) => {
+    const identity = brain.getIdentityState();
+    if (!identity.registered || !identity.agentId) {
+      res.json({ registered: false });
+      return;
+    }
+    try {
+      const rep = await wallet.queryReputation(identity.agentId);
+      res.json({ registered: true, ...rep });
+    } catch {
+      res.status(500).json({ error: 'Failed to query on-chain reputation' });
+    }
+  });
+
   /** Health check */
   app.get('/api/health', (_req, res) => {
     res.json({

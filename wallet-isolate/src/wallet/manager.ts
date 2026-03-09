@@ -10,7 +10,10 @@
  */
 
 import type { Chain, TokenSymbol } from '../ipc/types.js';
-import type { ChainConfig, WalletBalance, TransactionResult, WalletOperations } from './types.js';
+import type {
+  ChainConfig, WalletBalance, TransactionResult, WalletOperations,
+  IdentityOperationResult, OnChainReputation,
+} from './types.js';
 
 /** Decimals per token for formatting */
 function getDecimals(symbol: TokenSymbol): number {
@@ -141,6 +144,31 @@ export class WalletManager implements WalletOperations {
     return { success: false, error: 'Real WDK yield withdraw not yet implemented' };
   }
 
+  // ── ERC-8004 Identity & Reputation ──
+
+  async registerIdentity(_chain: Chain, _agentURI: string): Promise<IdentityOperationResult> {
+    // TODO: implement via ABI encoder + WDK sendTransaction({to, data, value})
+    return { success: false, error: 'Real WDK ERC-8004 registerIdentity not yet implemented' };
+  }
+
+  async setAgentWallet(_chain: Chain, _agentId: string, _deadline: number): Promise<IdentityOperationResult> {
+    // TODO: implement EIP-712 signing + WDK sendTransaction
+    return { success: false, error: 'Real WDK ERC-8004 setAgentWallet not yet implemented' };
+  }
+
+  async giveFeedback(
+    _chain: Chain, _targetAgentId: string, _value: number, _valueDecimals: number,
+    _tag1: string, _tag2: string, _endpoint: string, _feedbackURI: string, _feedbackHash: string,
+  ): Promise<TransactionResult> {
+    // TODO: implement via ABI encoder + WDK sendTransaction
+    return { success: false, error: 'Real WDK ERC-8004 giveFeedback not yet implemented' };
+  }
+
+  async getOnChainReputation(_chain: Chain, _agentId: string): Promise<OnChainReputation> {
+    // TODO: implement via eth_call + ABI decoder
+    return { feedbackCount: 0, totalValue: '0', valueDecimals: 0 };
+  }
+
   private ensureInitialized(): void {
     if (!this.initialized || this.wdk === null) {
       throw new Error('WalletManager not initialized');
@@ -169,6 +197,8 @@ const MOCK_RATES: Record<string, number> = {
 export class MockWalletManager implements WalletOperations {
   private balances: Map<string, bigint> = new Map();
   private initialized = false;
+  private nextAgentId = 1;
+  private feedbackStore: Array<{ targetAgentId: string; value: number; valueDecimals: number }> = [];
 
   async initialize(_seed: string, chains: ChainConfig[]): Promise<void> {
     // Seed up mock balances per chain
@@ -294,6 +324,45 @@ export class MockWalletManager implements WalletOperations {
     this.balances.set(key, balance + amount);
     const mockHash = `0xwithdraw${Date.now().toString(16)}`;
     return { success: true, txHash: mockHash };
+  }
+
+  // ── ERC-8004 Identity & Reputation (Mock) ──
+
+  async registerIdentity(_chain: Chain, _agentURI: string): Promise<IdentityOperationResult> {
+    this.ensureInit();
+    const agentId = String(this.nextAgentId++);
+    const mockHash = `0xregister${Date.now().toString(16)}`;
+    return { success: true, txHash: mockHash, agentId };
+  }
+
+  async setAgentWallet(_chain: Chain, _agentId: string, _deadline: number): Promise<IdentityOperationResult> {
+    this.ensureInit();
+    const mockHash = `0xsetwallet${Date.now().toString(16)}`;
+    return { success: true, txHash: mockHash };
+  }
+
+  async giveFeedback(
+    _chain: Chain, targetAgentId: string, value: number, valueDecimals: number,
+    _tag1: string, _tag2: string, _endpoint: string, _feedbackURI: string, _feedbackHash: string,
+  ): Promise<TransactionResult> {
+    this.ensureInit();
+    this.feedbackStore.push({ targetAgentId, value, valueDecimals });
+    const mockHash = `0xfeedback${Date.now().toString(16)}`;
+    return { success: true, txHash: mockHash };
+  }
+
+  async getOnChainReputation(_chain: Chain, agentId: string): Promise<OnChainReputation> {
+    this.ensureInit();
+    const entries = this.feedbackStore.filter(f => f.targetAgentId === agentId);
+    if (entries.length === 0) {
+      return { feedbackCount: 0, totalValue: '0', valueDecimals: 0 };
+    }
+    const totalValue = entries.reduce((sum, e) => sum + e.value, 0);
+    return {
+      feedbackCount: entries.length,
+      totalValue: String(totalValue),
+      valueDecimals: entries[0]?.valueDecimals ?? 0,
+    };
   }
 
   private ensureInit(): void {

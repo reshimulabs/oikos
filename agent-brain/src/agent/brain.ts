@@ -13,12 +13,14 @@ import type {
   SwapProposal,
   BridgeProposal,
   YieldProposal,
+  FeedbackProposal,
   ProposalCommon,
   ExecutionResult,
   BalanceResponse,
   PolicyStatus,
   TokenSymbol,
   Chain,
+  IdentityResult,
 } from '../ipc/types.js';
 import type { BrainConfig } from '../config/env.js';
 import type OpenAI from 'openai';
@@ -26,7 +28,16 @@ import type { LLMPaymentDecision } from '../llm/client.js';
 import { MockLLM } from '../llm/mock.js';
 import { reasonAboutPayment } from '../llm/client.js';
 import { buildSystemPrompt, buildEventPrompt } from './prompts.js';
-import type { SwarmEvent, BoardAnnouncement } from '../swarm/types.js';
+import type { SwarmEvent, SwarmSettlementEvent, BoardAnnouncement } from '../swarm/types.js';
+
+/** ERC-8004 on-chain identity state */
+export interface ERC8004Identity {
+  registered: boolean;
+  agentId: string | null;
+  walletSet: boolean;
+  agentURI: string | null;
+  registrationTxHash: string | null;
+}
 
 /** Brain state exposed to the dashboard */
 export interface BrainState {
@@ -45,6 +56,7 @@ export interface BrainState {
   portfolioAllocations: Record<string, number>;
   defiOps: number;
   swarmEvents: Array<{ kind: string; summary: string; timestamp: number }>;
+  erc8004Identity: ERC8004Identity;
 }
 
 export class AgentBrain {
@@ -69,6 +81,13 @@ export class AgentBrain {
     portfolioAllocations: {},
     defiOps: 0,
     swarmEvents: [],
+    erc8004Identity: {
+      registered: false,
+      agentId: null,
+      walletSet: false,
+      agentURI: null,
+      registrationTxHash: null,
+    },
   };
 
   /** Event buffer — accumulates events between reasoning cycles */
@@ -98,6 +117,50 @@ export class AgentBrain {
   /** Get current brain state (for dashboard) */
   getState(): BrainState {
     return { ...this.state };
+  }
+
+  /** Get ERC-8004 identity state */
+  getIdentityState(): ERC8004Identity {
+    return { ...this.state.erc8004Identity };
+  }
+
+  /**
+   * Bootstrap ERC-8004 on-chain identity.
+   * 1. Register identity (mint ERC-721 NFT)
+   * 2. Set agent wallet (EIP-712 signed)
+   */
+  async bootstrapIdentity(dashboardPort: number): Promise<void> {
+    const agentURI = `http://127.0.0.1:${dashboardPort}/agent-card.json`;
+    this.state.erc8004Identity.agentURI = agentURI;
+
+    console.error(`[brain] ERC-8004: Registering identity (agentURI: ${agentURI})...`);
+
+    try {
+      // Step 1: Register identity
+      const registerResult: IdentityResult = await this.wallet.registerIdentity(agentURI);
+
+      if (registerResult.status === 'registered' && registerResult.agentId) {
+        this.state.erc8004Identity.registered = true;
+        this.state.erc8004Identity.agentId = registerResult.agentId;
+        this.state.erc8004Identity.registrationTxHash = registerResult.txHash ?? null;
+        console.error(`[brain] ERC-8004: Identity registered (agentId: ${registerResult.agentId}, tx: ${registerResult.txHash ?? 'n/a'})`);
+
+        // Step 2: Set agent wallet (deadline: 1 hour from now)
+        const deadline = Math.floor(Date.now() / 1000) + 3600;
+        const walletResult: IdentityResult = await this.wallet.setAgentWallet(registerResult.agentId, deadline);
+
+        if (walletResult.status === 'wallet_set') {
+          this.state.erc8004Identity.walletSet = true;
+          console.error(`[brain] ERC-8004: Wallet linked (tx: ${walletResult.txHash ?? 'n/a'})`);
+        } else {
+          console.error(`[brain] ERC-8004: setAgentWallet failed: ${walletResult.error ?? 'unknown'}`);
+        }
+      } else {
+        console.error(`[brain] ERC-8004: Registration failed: ${registerResult.error ?? 'unknown'}`);
+      }
+    } catch (err) {
+      console.error(`[brain] ERC-8004: Bootstrap error: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
   }
 
   /** Feed events from the event source */
@@ -271,6 +334,42 @@ export class AgentBrain {
     if (event.kind === 'board_message' && event.message.type === 'announcement') {
       const ann = event.message as BoardAnnouncement;
       console.error(`[brain] Swarm announcement: "${ann.title}" from ${ann.agentName} (${ann.category})`);
+    }
+
+    // On settlement, submit ERC-8004 feedback if identity is registered
+    if (event.kind === 'settlement_completed' && this.state.erc8004Identity.registered) {
+      void this.submitSettlementFeedback(event as SwarmSettlementEvent);
+    }
+  }
+
+  /** Submit ERC-8004 reputation feedback after a room settlement. */
+  private async submitSettlementFeedback(event: SwarmSettlementEvent): Promise<void> {
+    const agentId = this.state.erc8004Identity.agentId;
+    if (!agentId) return;
+
+    const feedbackValue = event.success ? 100 : -50;
+    const feedbackProposal: FeedbackProposal = {
+      amount: event.amount,
+      symbol: event.symbol as TokenSymbol,
+      chain: 'ethereum' as Chain,
+      reason: `Settlement feedback for room ${event.announcementId}`,
+      confidence: 1.0,
+      strategy: 'reputation',
+      timestamp: Date.now(),
+      targetAgentId: event.peerPubkey,
+      feedbackValue,
+      tag1: 'settlement',
+      tag2: event.success ? 'success' : 'failure',
+      endpoint: '',
+      feedbackURI: '',
+      feedbackHash: '',
+    };
+
+    try {
+      const result = await this.wallet.proposeFeedback(feedbackProposal, 'swarm');
+      console.error(`[brain] ERC-8004 feedback: ${result.status} (peer: ${event.peerPubkey.slice(0, 12)}...)`);
+    } catch (err) {
+      console.error(`[brain] ERC-8004 feedback error: ${err instanceof Error ? err.message : 'unknown'}`);
     }
   }
 

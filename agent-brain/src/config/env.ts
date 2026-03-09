@@ -64,6 +64,11 @@ export interface BrainConfig {
 
   /** Path to persist the Ed25519 keypair */
   keypairPath: string;
+
+  // ── ERC-8004 Identity ──
+
+  /** Enable ERC-8004 on-chain identity registration */
+  erc8004Enabled: boolean;
 }
 
 function getEnv(key: string, fallback?: string): string {
@@ -102,5 +107,8 @@ export function loadConfig(): BrainConfig {
     agentCapabilities: getEnv('AGENT_CAPABILITIES', 'portfolio-analyst,price-feed'),
     mockSwarm: getEnv('MOCK_SWARM', 'true') === 'true',
     keypairPath: getEnv('KEYPAIR_PATH', '.oikos-keypair.json'),
+
+    // ERC-8004
+    erc8004Enabled: getEnv('ERC8004_ENABLED', 'false') === 'true',
   };
 }

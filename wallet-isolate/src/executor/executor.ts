@@ -19,6 +19,7 @@ import type {
   SwapProposal,
   BridgeProposal,
   YieldProposal,
+  FeedbackProposal,
   ExecutionResult,
   ProposalSource,
 } from '../ipc/types.js';
@@ -127,6 +128,13 @@ export class ProposalExecutor {
         } else {
           return this.wallet.withdraw(p.chain, p.symbol, BigInt(p.amount), p.protocol);
         }
+      }
+      case 'feedback': {
+        const p = proposal as FeedbackProposal;
+        return this.wallet.giveFeedback(
+          p.chain, p.targetAgentId, p.feedbackValue, 2,
+          p.tag1, p.tag2, p.endpoint, p.feedbackURI, p.feedbackHash
+        );
       }
       default:
         return { success: false, error: `Unknown proposal type: ${proposalType}` };

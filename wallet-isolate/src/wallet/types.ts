@@ -28,6 +28,21 @@ export interface TransactionResult {
   error?: string;
 }
 
+/** Result of an ERC-8004 identity lifecycle operation. */
+export interface IdentityOperationResult {
+  success: boolean;
+  txHash?: string;
+  agentId?: string;
+  error?: string;
+}
+
+/** On-chain reputation data from ERC-8004 ReputationRegistry. */
+export interface OnChainReputation {
+  feedbackCount: number;
+  totalValue: string;
+  valueDecimals: number;
+}
+
 export interface WalletOperations {
   /** Initialize the wallet with a seed phrase and register chains. */
   initialize(seed: string, chains: ChainConfig[]): Promise<void>;
@@ -58,4 +73,21 @@ export interface WalletOperations {
 
   /** Withdraw tokens from a yield protocol. */
   withdraw(chain: Chain, symbol: TokenSymbol, amount: bigint, protocol: string): Promise<TransactionResult>;
+
+  // ── ERC-8004 Identity & Reputation ──
+
+  /** Register an on-chain ERC-8004 identity (mints ERC-721 NFT). */
+  registerIdentity(chain: Chain, agentURI: string): Promise<IdentityOperationResult>;
+
+  /** Set the agent's wallet address on the IdentityRegistry (EIP-712 signed). */
+  setAgentWallet(chain: Chain, agentId: string, deadline: number): Promise<IdentityOperationResult>;
+
+  /** Submit on-chain reputation feedback for a peer agent. */
+  giveFeedback(
+    chain: Chain, targetAgentId: string, value: number, valueDecimals: number,
+    tag1: string, tag2: string, endpoint: string, feedbackURI: string, feedbackHash: string
+  ): Promise<TransactionResult>;
+
+  /** Query on-chain reputation from ERC-8004 ReputationRegistry. */
+  getOnChainReputation(chain: Chain, agentId: string): Promise<OnChainReputation>;
 }

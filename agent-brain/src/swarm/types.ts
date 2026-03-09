@@ -32,6 +32,10 @@ export interface AgentIdentity {
   reputation: number;
   /** BLAKE2b-256 hash of audit log (hex) — commitment for verification */
   auditHash: string;
+  /** ERC-8004 on-chain agent ID (if registered) */
+  erc8004AgentId?: string;
+  /** ERC-8004 on-chain reputation summary (if available) */
+  onChainReputation?: { feedbackCount: number; averageScore: number };
 }
 
 // ── Board Messages (Public Discovery) ──
@@ -182,11 +186,22 @@ export interface SwarmFeedEvent {
   fromPubkey: string;
 }
 
+export interface SwarmSettlementEvent {
+  kind: 'settlement_completed';
+  announcementId: string;
+  peerPubkey: string;
+  txHash: string;
+  amount: string;
+  symbol: string;
+  success: boolean;
+}
+
 export type SwarmEvent =
   | SwarmPeerEvent
   | SwarmBoardEvent
   | SwarmRoomEvent
-  | SwarmFeedEvent;
+  | SwarmFeedEvent
+  | SwarmSettlementEvent;
 
 // ── Room Lifecycle ──
 

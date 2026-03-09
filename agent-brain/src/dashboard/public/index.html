@@ -304,12 +304,44 @@
     </div>
   </div>
 
+  <!-- ERC-8004 On-Chain Identity Section -->
+  <div id="identity-section" class="swarm-hidden">
+    <div class="section-title">On-Chain Identity (ERC-8004)</div>
+    <div class="grid">
+      <div class="card">
+        <h2>Identity Status</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+          <div><span class="label">Registered</span><div id="id-registered" style="font-size:1.2rem;font-weight:bold;color:var(--muted)">--</div></div>
+          <div><span class="label">Agent ID</span><div id="id-agent-id" style="font-size:1.2rem;font-weight:bold;">--</div></div>
+          <div><span class="label">Wallet Linked</span><div id="id-wallet-set" style="font-size:1.2rem;font-weight:bold;color:var(--muted)">--</div></div>
+          <div><span class="label">Agent Card</span><div id="id-agent-card" style="font-size:0.75rem;">--</div></div>
+        </div>
+        <div style="margin-top:0.75rem;">
+          <span class="label">Registration Tx</span>
+          <div id="id-reg-tx" style="font-size:0.75rem;color:var(--muted);word-break:break-all;">--</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>On-Chain Reputation</h2>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+          <div><span class="label">Feedback Count</span><div class="stat blue" id="rep-feedback-count" style="font-size:1.5rem;">0</div></div>
+          <div><span class="label">Total Value</span><div class="stat green" id="rep-total-value" style="font-size:1.5rem;">0</div></div>
+        </div>
+        <div class="arch-note" style="margin-top:0.5rem;">
+          Two-layer reputation: Off-chain (BLAKE2b audit hash) + On-chain (ERC-8004 ReputationRegistry).
+          On-chain reputation is persistent, cross-agent verifiable, and Sybil-resistant.
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="arch-note">
     Oikos Protocol: Process-isolated, multi-chain, multi-asset wallet for autonomous AI agents.
     Brain (Node.js) reasons about portfolio strategy and proposes operations via IPC.
     Wallet Isolate (Bare Runtime) enforces policies and signs transactions.
-    Supported ops: payment, swap, bridge, yield. All policy-enforced.
-    The brain NEVER touches private keys.
+    Supported ops: payment, swap, bridge, yield, feedback. All policy-enforced.
+    The brain NEVER touches private keys. ERC-8004 identity is on-chain, portable, cross-platform.
   </div>
 
   <script>
@@ -556,6 +588,35 @@
           susEl.className = 'econ-value ' + (sus >= 0.5 ? 'econ-positive' : 'econ-negative');
         }
       }
+    }
+
+    // ERC-8004 identity
+    var identity = await fetchJSON('/api/identity');
+    if (identity && identity.registered) {
+      document.getElementById('identity-section').classList.remove('swarm-hidden');
+      document.getElementById('id-registered').textContent = 'YES';
+      document.getElementById('id-registered').style.color = 'var(--green)';
+      var agentIdLink = identity.agentId
+        ? '<a href="https://sepolia.etherscan.io/token/0x8004A818BFB912233c491871b3d84c89A494BD9e#' + identity.agentId + '" target="_blank" style="color:var(--purple);text-decoration:none;">#' + identity.agentId + '</a>'
+        : '--';
+      document.getElementById('id-agent-id').innerHTML = agentIdLink;
+      document.getElementById('id-wallet-set').textContent = identity.walletSet ? 'YES' : 'NO';
+      document.getElementById('id-wallet-set').style.color = identity.walletSet ? 'var(--green)' : 'var(--red)';
+      document.getElementById('id-agent-card').innerHTML = identity.agentURI
+        ? '<a href="' + identity.agentURI + '" target="_blank" style="color:var(--cyan);text-decoration:none;">' + identity.agentURI + '</a>'
+        : '--';
+      document.getElementById('id-reg-tx').textContent = identity.registrationTxHash || '--';
+
+      // On-chain reputation
+      var rep = await fetchJSON('/api/reputation/onchain');
+      if (rep && rep.registered) {
+        document.getElementById('rep-feedback-count').textContent = rep.feedbackCount || 0;
+        document.getElementById('rep-total-value').textContent = rep.totalValue || '0';
+      }
+    } else if (identity && !identity.registered) {
+      document.getElementById('identity-section').classList.remove('swarm-hidden');
+      document.getElementById('id-registered').textContent = 'NO';
+      document.getElementById('id-registered').style.color = 'var(--red)';
     }
 
     // Poll every 2 seconds

@@ -91,6 +91,18 @@ export class AuditLog {
     });
   }
 
+  /** Log an ERC-8004 identity lifecycle operation (register, setWallet). */
+  logIdentityOperation(operation: string, result: { success: boolean; txHash?: string; agentId?: string; error?: string }): AuditEntry {
+    return this.writeEntry({
+      id: generateEntryId(),
+      timestamp: new Date().toISOString(),
+      type: 'identity_operation',
+      proposalType: operation,
+      txHash: result.txHash,
+      error: result.error,
+    });
+  }
+
   /** Query recent entries (for dashboard display via IPC). */
   getEntries(limit?: number, since?: number): AuditEntry[] {
     let result = this.entries;

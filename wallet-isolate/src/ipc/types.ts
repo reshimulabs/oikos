@@ -54,8 +54,19 @@ export interface YieldProposal extends ProposalCommon {
   action: 'deposit' | 'withdraw';
 }
 
+/** Submit on-chain reputation feedback for a peer agent (ERC-8004) */
+export interface FeedbackProposal extends ProposalCommon {
+  targetAgentId: string;  // uint256 as string — the ERC-8004 agent being rated
+  feedbackValue: number;  // int128 — positive = good, negative = bad
+  tag1: string;           // Category tag (e.g., "service-quality")
+  tag2: string;           // Sub-tag (e.g., "price-feed")
+  endpoint: string;       // Service endpoint being rated
+  feedbackURI: string;    // Off-chain details URL (can be empty)
+  feedbackHash: string;   // bytes32 hex — keccak256 of off-chain details
+}
+
 /** Discriminated union of all proposal types */
-export type AnyProposal = PaymentProposal | SwapProposal | BridgeProposal | YieldProposal;
+export type AnyProposal = PaymentProposal | SwapProposal | BridgeProposal | YieldProposal | FeedbackProposal;
 
 // ── Query Types (Brain → Wallet) ──
 
@@ -81,6 +92,27 @@ export interface AuditQuery {
   since?: number; // Epoch ms
 }
 
+// ── ERC-8004 Identity Types (Brain → Wallet) ──
+
+/** Register an on-chain ERC-8004 identity (mints ERC-721 NFT). */
+export interface IdentityRegisterRequest {
+  agentURI: string;  // URL where Agent Card JSON is served
+  chain: Chain;      // Must be 'ethereum' (Sepolia) for ERC-8004
+}
+
+/** Link the wallet's EOA address to its ERC-8004 identity NFT. */
+export interface IdentitySetWalletRequest {
+  agentId: string;   // uint256 as string
+  deadline: number;  // Unix timestamp (max 5 min tolerance)
+  chain: Chain;
+}
+
+/** Query on-chain reputation for a given ERC-8004 agent. */
+export interface ReputationQuery {
+  agentId: string;   // uint256 as string
+  chain: Chain;
+}
+
 // ── IPC Request Envelope ──
 
 export type IPCRequestType =
@@ -88,18 +120,23 @@ export type IPCRequestType =
   | 'propose_swap'
   | 'propose_bridge'
   | 'propose_yield'
+  | 'propose_feedback'
+  | 'identity_register'
+  | 'identity_set_wallet'
   | 'query_balance'
   | 'query_balance_all'
   | 'query_address'
   | 'query_policy'
-  | 'query_audit';
+  | 'query_audit'
+  | 'query_reputation';
 
 export interface IPCRequest {
   id: string;
   type: IPCRequestType;
   source?: ProposalSource; // Origin of the proposal (for audit trail)
-  payload: PaymentProposal | SwapProposal | BridgeProposal | YieldProposal
-    | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery;
+  payload: PaymentProposal | SwapProposal | BridgeProposal | YieldProposal | FeedbackProposal
+    | IdentityRegisterRequest | IdentitySetWalletRequest
+    | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery | ReputationQuery;
 }
 
 // ── Wallet → Brain Responses ──
@@ -138,6 +175,22 @@ export interface AuditEntryResponse {
   entries: AuditEntry[];
 }
 
+/** Result of an ERC-8004 identity lifecycle operation. */
+export interface IdentityResult {
+  status: 'registered' | 'wallet_set' | 'failed';
+  agentId?: string;
+  txHash?: string;
+  error?: string;
+}
+
+/** On-chain reputation query result from ERC-8004 ReputationRegistry. */
+export interface ReputationResult {
+  agentId: string;
+  feedbackCount: number;
+  totalValue: string;    // Aggregated feedback value as string
+  valueDecimals: number;
+}
+
 export type IPCResponseType =
   | 'execution_result'
   | 'balance'
@@ -145,6 +198,8 @@ export type IPCResponseType =
   | 'address'
   | 'policy_status'
   | 'audit_entries'
+  | 'identity_result'
+  | 'reputation_result'
   | 'error';
 
 export interface IPCResponse {
@@ -157,6 +212,8 @@ export interface IPCResponse {
     | AddressResponse
     | PolicyStatusResponse
     | AuditEntryResponse
+    | IdentityResult
+    | ReputationResult
     | { message: string };
 }
 
@@ -165,8 +222,8 @@ export interface IPCResponse {
 export interface AuditEntry {
   id: string;
   timestamp: string; // ISO 8601
-  type: 'proposal_received' | 'policy_enforcement' | 'execution_success' | 'execution_failure' | 'malformed_message';
-  proposalType?: string;  // 'payment' | 'swap' | 'bridge' | 'yield'
+  type: 'proposal_received' | 'policy_enforcement' | 'execution_success' | 'execution_failure' | 'malformed_message' | 'identity_operation';
+  proposalType?: string;  // 'payment' | 'swap' | 'bridge' | 'yield' | 'feedback' | 'register' | 'set_wallet'
   source?: ProposalSource;
   proposal?: ProposalCommon;
   violations?: string[];
@@ -179,8 +236,9 @@ export interface AuditEntry {
 const VALID_SYMBOLS: ReadonlySet<string> = new Set(['USDT', 'BTC', 'XAUT', 'USAT', 'ETH']);
 const VALID_CHAINS: ReadonlySet<string> = new Set(['ethereum', 'polygon', 'bitcoin', 'arbitrum']);
 const VALID_REQUEST_TYPES: ReadonlySet<string> = new Set([
-  'propose_payment', 'propose_swap', 'propose_bridge', 'propose_yield',
-  'query_balance', 'query_balance_all', 'query_address', 'query_policy', 'query_audit'
+  'propose_payment', 'propose_swap', 'propose_bridge', 'propose_yield', 'propose_feedback',
+  'identity_register', 'identity_set_wallet',
+  'query_balance', 'query_balance_all', 'query_address', 'query_policy', 'query_audit', 'query_reputation'
 ]);
 const VALID_YIELD_ACTIONS: ReadonlySet<string> = new Set(['deposit', 'withdraw']);
 
@@ -223,6 +281,19 @@ export function validateIPCRequest(raw: unknown): IPCRequest | null {
       break;
     case 'propose_yield':
       if (!validateYieldProposal(payload)) return null;
+      break;
+    case 'propose_feedback':
+      if (!validateFeedbackProposal(payload)) return null;
+      break;
+    case 'identity_register':
+      if (!validateIdentityRegisterRequest(payload)) return null;
+      break;
+    case 'identity_set_wallet':
+      if (!validateIdentitySetWalletRequest(payload)) return null;
+      break;
+    case 'query_reputation':
+      if (typeof payload['agentId'] !== 'string' || payload['agentId'].length === 0) return null;
+      if (!isValidChain(payload['chain'])) return null;
       break;
     case 'query_balance':
       if (!isValidChain(payload['chain']) || !isValidTokenSymbol(payload['symbol'])) return null;
@@ -289,4 +360,28 @@ function validateYieldProposal(obj: Record<string, unknown>): boolean {
   if (typeof obj['protocol'] !== 'string' || obj['protocol'].length === 0) return false;
   if (typeof obj['action'] !== 'string' || !VALID_YIELD_ACTIONS.has(obj['action'])) return false;
   return validateProposalCommon(obj);
+}
+
+function validateFeedbackProposal(obj: Record<string, unknown>): boolean {
+  if (typeof obj['targetAgentId'] !== 'string' || obj['targetAgentId'].length === 0) return false;
+  if (typeof obj['feedbackValue'] !== 'number') return false;
+  if (typeof obj['tag1'] !== 'string') return false;
+  if (typeof obj['tag2'] !== 'string') return false;
+  if (typeof obj['endpoint'] !== 'string') return false;
+  if (typeof obj['feedbackURI'] !== 'string') return false;
+  if (typeof obj['feedbackHash'] !== 'string') return false;
+  return validateProposalCommon(obj);
+}
+
+function validateIdentityRegisterRequest(obj: Record<string, unknown>): boolean {
+  if (typeof obj['agentURI'] !== 'string' || obj['agentURI'].length === 0) return false;
+  if (!isValidChain(obj['chain'])) return false;
+  return true;
+}
+
+function validateIdentitySetWalletRequest(obj: Record<string, unknown>): boolean {
+  if (typeof obj['agentId'] !== 'string' || obj['agentId'].length === 0) return false;
+  if (typeof obj['deadline'] !== 'number' || obj['deadline'] <= 0) return false;
+  if (!isValidChain(obj['chain'])) return false;
+  return true;
 }

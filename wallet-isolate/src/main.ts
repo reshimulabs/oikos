@@ -28,6 +28,9 @@ import type {
   BalanceQuery,
   AddressQuery,
   AuditQuery,
+  IdentityRegisterRequest,
+  IdentitySetWalletRequest,
+  ReputationQuery,
 } from './ipc/types.js';
 import { PolicyEngine } from './policies/engine.js';
 import type { PolicyConfig } from './policies/types.js';
@@ -88,6 +91,7 @@ const PROPOSAL_TYPE_MAP: Record<string, string> = {
   'propose_swap': 'swap',
   'propose_bridge': 'bridge',
   'propose_yield': 'yield',
+  'propose_feedback': 'feedback',
 };
 
 // ── Request Handler ──
@@ -176,6 +180,43 @@ async function handleRequest(
             id: request.id,
             type: 'audit_entries',
             payload: { entries }
+          };
+          break;
+        }
+
+        // ── ERC-8004 Identity & Reputation (bypass PolicyEngine) ──
+
+        case 'identity_register': {
+          const req = request.payload as IdentityRegisterRequest;
+          const result = await wallet.registerIdentity(req.chain, req.agentURI);
+          audit.logIdentityOperation('identity_register', result);
+          response = {
+            id: request.id,
+            type: 'identity_result',
+            payload: { status: result.success ? 'registered' : 'failed', agentId: result.agentId, txHash: result.txHash, error: result.error }
+          };
+          break;
+        }
+
+        case 'identity_set_wallet': {
+          const req = request.payload as IdentitySetWalletRequest;
+          const result = await wallet.setAgentWallet(req.chain, req.agentId, req.deadline);
+          audit.logIdentityOperation('identity_set_wallet', result);
+          response = {
+            id: request.id,
+            type: 'identity_result',
+            payload: { status: result.success ? 'wallet_set' : 'failed', txHash: result.txHash, error: result.error }
+          };
+          break;
+        }
+
+        case 'query_reputation': {
+          const req = request.payload as ReputationQuery;
+          const rep = await wallet.getOnChainReputation(req.chain, req.agentId);
+          response = {
+            id: request.id,
+            type: 'reputation_result',
+            payload: { agentId: req.agentId, feedbackCount: rep.feedbackCount, totalValue: rep.totalValue, valueDecimals: rep.valueDecimals }
           };
           break;
         }
