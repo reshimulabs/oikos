@@ -133,7 +133,29 @@ async function main(): Promise<void> {
     console.error(`[oikos] Swarm: ${config.mockSwarm ? 'mock' : 'live'} (${config.agentName})`);
   }
 
-  // 7. Start dashboard
+  // 7. Start companion (if enabled)
+  let companion: import('./companion/coordinator.js').CompanionCoordinator | null = null;
+
+  if (config.companionEnabled && config.companionOwnerPubkey) {
+    const { CompanionCoordinator } = await import('./companion/coordinator.js');
+    companion = new CompanionCoordinator(wallet, brain, {
+      ownerPubkey: config.companionOwnerPubkey,
+      keypairPath: config.keypairPath,
+      topicSeed: config.companionTopicSeed,
+      updateIntervalMs: config.companionUpdateIntervalMs,
+    }, swarm ?? undefined);
+
+    // Wire companion instructions to brain
+    companion.onInstruction((text) => {
+      console.error(`[oikos] Companion instruction: "${text}"`);
+      // Instructions logged; full LLM routing is a Phase 6 enhancement
+    });
+
+    await companion.start();
+    console.error(`[oikos] Companion: listening for owner`);
+  }
+
+  // 8. Start dashboard
   createDashboard(brain, wallet, config.dashboardPort, swarm ?? undefined);
 
   console.error('[oikos] Agent Brain ready.');
@@ -141,11 +163,15 @@ async function main(): Promise<void> {
   if (config.swarmEnabled) {
     console.error(`[oikos] Swarm: enabled (${config.agentName})`);
   }
+  if (config.companionEnabled) {
+    console.error(`[oikos] Companion: enabled (owner: ${config.companionOwnerPubkey.slice(0, 16)}...)`);
+  }
   console.error('[oikos] Press Ctrl+C to stop.');
 
   // Graceful shutdown
   const shutdown = async (): Promise<void> => {
     console.error('[oikos] Shutting down...');
+    if (companion) await companion.stop();
     if (swarm) await swarm.stop();
     wallet.stop();
     process.exit(0);

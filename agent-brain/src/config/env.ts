@@ -69,6 +69,20 @@ export interface BrainConfig {
 
   /** Enable ERC-8004 on-chain identity registration */
   erc8004Enabled: boolean;
+
+  // ── Companion App ──
+
+  /** Enable companion P2P channel */
+  companionEnabled: boolean;
+
+  /** Ed25519 public key of the authorized owner (hex, 64 chars) */
+  companionOwnerPubkey: string;
+
+  /** Topic seed for companion discovery */
+  companionTopicSeed: string;
+
+  /** State push interval to companion (ms) */
+  companionUpdateIntervalMs: number;
 }
 
 function getEnv(key: string, fallback?: string): string {
@@ -110,5 +124,11 @@ export function loadConfig(): BrainConfig {
 
     // ERC-8004
     erc8004Enabled: getEnv('ERC8004_ENABLED', 'false') === 'true',
+
+    // Companion
+    companionEnabled: getEnv('COMPANION_ENABLED', 'false') === 'true',
+    companionOwnerPubkey: getEnv('COMPANION_OWNER_PUBKEY', ''),
+    companionTopicSeed: getEnv('COMPANION_TOPIC_SEED', 'oikos-companion-default'),
+    companionUpdateIntervalMs: parseInt(getEnv('COMPANION_UPDATE_INTERVAL_MS', '5000'), 10),
   };
 }
