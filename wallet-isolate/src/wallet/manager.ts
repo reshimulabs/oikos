@@ -14,6 +14,11 @@ import type {
   ChainConfig, WalletBalance, TransactionResult, WalletOperations,
   IdentityOperationResult, OnChainReputation,
 } from './types.js';
+import { ERC8004_CONTRACTS, TRANSFER_EVENT_TOPIC, EIP712_DOMAIN, SET_AGENT_WALLET_TYPES } from '../erc8004/constants.js';
+import {
+  encodeRegister, encodeSetAgentWallet, encodeGiveFeedback,
+  encodeGetSummary, decodeUint256, decodeSummaryResult,
+} from '../erc8004/abi-encode.js';
 
 /** Decimals per token for formatting */
 function getDecimals(symbol: TokenSymbol): number {
@@ -36,15 +41,66 @@ function formatBalance(raw: bigint, symbol: TokenSymbol): string {
   return `${whole}.${trimmed} ${symbol}`;
 }
 
+// ── WDK Account Type Assertions ──
+// WDK has loose runtime typing. These interfaces capture what we need.
+
+interface WdkAccount {
+  getAddress(): Promise<string>;
+  getBalance(): Promise<bigint>;
+  sendTransaction(tx: {
+    to: string;
+    value: number | bigint;
+    data?: string;
+    gasLimit?: number | bigint;
+  }): Promise<{ hash: string; fee: bigint }>;
+  getTransactionReceipt(hash: string): Promise<{
+    logs: Array<{ topics: string[]; data: string }>;
+  } | null>;
+  // eslint-disable-next-line @typescript-eslint/naming-convention -- WDK internal field
+  _signer?: {
+    signTypedData(
+      domain: Record<string, unknown>,
+      types: Record<string, unknown>,
+      message: Record<string, unknown>,
+    ): Promise<string>;
+  };
+}
+
+interface WdkInstance {
+  getAccount(chain: string, index: number): Promise<WdkAccount>;
+}
+
+// ── Known Token Addresses per Chain ──
+// WDK protocol modules require contract addresses (not symbols).
+// These are testnet addresses — production would use mainnet.
+
+const TOKEN_ADDRESSES: Partial<Record<Chain, Partial<Record<TokenSymbol, string>>>> = {
+  ethereum: {
+    USDT: '0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0', // Sepolia USDT (Tether faucet)
+    ETH: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',  // Native ETH sentinel
+  },
+  arbitrum: {
+    USDT: '0x30a51024e25A6E8bDc4C1B68A9BDcF1B3C8fDB70', // Arbitrum Sepolia USDT
+    ETH: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+  },
+};
+
+/** Resolve a TokenSymbol to its contract address for a given chain. */
+function getTokenAddress(chain: Chain, symbol: TokenSymbol): string | undefined {
+  return TOKEN_ADDRESSES[chain]?.[symbol];
+}
+
 /**
  * WDK Wallet Manager — real implementation using @tetherto/wdk.
  *
  * Initializes WDK with the seed phrase and registers chain wallets.
- * Provides getAddress, getBalance, and sendTransaction.
+ * Provides getAddress, getBalance, sendTransaction, swap, bridge,
+ * deposit, withdraw, and ERC-8004 identity/reputation operations.
  */
 export class WalletManager implements WalletOperations {
-  private wdk: unknown = null;
+  private wdk: WdkInstance | null = null;
   private initialized = false;
+  private rpcUrls: Map<string, string> = new Map();
 
   /**
    * Initialize the wallet.
@@ -67,6 +123,10 @@ export class WalletManager implements WalletOperations {
         (wdk as any).registerWallet(config.chain, WalletManagerEvm, {
           provider: config.provider
         });
+        // Store RPC URL for eth_call operations
+        if (config.provider) {
+          this.rpcUrls.set(config.chain, config.provider);
+        }
       } else if (config.chain === 'bitcoin') {
         const { default: WalletManagerBtc } = await import('@tetherto/wdk-wallet-btc');
         // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WDK registerWallet has loose typing
@@ -78,21 +138,17 @@ export class WalletManager implements WalletOperations {
       }
     }
 
-    this.wdk = wdk;
+    this.wdk = wdk as unknown as WdkInstance;
     this.initialized = true;
   }
 
   async getAddress(chain: Chain): Promise<string> {
-    this.ensureInitialized();
-    const wdk = this.wdk as { getAccount: (chain: string, index: number) => Promise<{ getAddress: () => Promise<string> }> };
-    const account = await wdk.getAccount(chain, 0);
+    const account = await this.getAccount(chain);
     return account.getAddress();
   }
 
   async getBalance(chain: Chain, symbol: TokenSymbol): Promise<WalletBalance> {
-    this.ensureInitialized();
-    const wdk = this.wdk as { getAccount: (chain: string, index: number) => Promise<{ getBalance: () => Promise<bigint> }> };
-    const account = await wdk.getAccount(chain, 0);
+    const account = await this.getAccount(chain);
     const raw = await account.getBalance();
     return { chain, symbol, raw, formatted: formatBalance(raw, symbol) };
   }
@@ -110,12 +166,7 @@ export class WalletManager implements WalletOperations {
     this.ensureInitialized();
 
     try {
-      const wdk = this.wdk as {
-        getAccount: (chain: string, index: number) => Promise<{
-          sendTransaction: (opts: { to: string; value: bigint }) => Promise<{ hash: string }>
-        }>
-      };
-      const account = await wdk.getAccount(chain, 0);
+      const account = await this.getAccount(chain);
       const result = await account.sendTransaction({ to, value: amount });
       return { success: true, txHash: result.hash };
     } catch (err: unknown) {
@@ -124,49 +175,303 @@ export class WalletManager implements WalletOperations {
     }
   }
 
-  async swap(_chain: Chain, _fromSymbol: TokenSymbol, _toSymbol: TokenSymbol, _fromAmount: bigint): Promise<TransactionResult> {
-    // TODO: implement via WDK swap modules when available
-    return { success: false, error: 'Real WDK swap not yet implemented' };
+  // ── DeFi Operations via WDK Protocol Modules ──
+
+  /**
+   * Swap tokens via Velora DEX protocol.
+   * Requires @tetherto/wdk-protocol-swap-velora-evm.
+   */
+  async swap(chain: Chain, fromSymbol: TokenSymbol, toSymbol: TokenSymbol, fromAmount: bigint): Promise<TransactionResult> {
+    this.ensureInitialized();
+
+    try {
+      const account = await this.getAccount(chain);
+
+      // Resolve token addresses
+      const tokenIn = getTokenAddress(chain, fromSymbol);
+      const tokenOut = getTokenAddress(chain, toSymbol);
+      if (!tokenIn) return { success: false, error: `No token address for ${fromSymbol} on ${chain}` };
+      if (!tokenOut) return { success: false, error: `No token address for ${toSymbol} on ${chain}` };
+
+      // Dynamic import — only loaded when swap is actually called
+      const { default: VeloraProtocolEvm } = await import('@tetherto/wdk-protocol-swap-velora-evm');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WDK account satisfies interface at runtime
+      const velora = new VeloraProtocolEvm(account as any, { swapMaxFee: 1000000n });
+
+      const result = await velora.swap({
+        tokenIn,
+        tokenOut,
+        tokenInAmount: fromAmount,
+      });
+      return { success: true, txHash: result.hash };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown swap error';
+      return { success: false, error: message };
+    }
   }
 
-  async bridge(_fromChain: Chain, _toChain: Chain, _symbol: TokenSymbol, _amount: bigint): Promise<TransactionResult> {
-    // TODO: implement via WDK bridge modules when available
-    return { success: false, error: 'Real WDK bridge not yet implemented' };
+  /**
+   * Bridge tokens cross-chain via USDT0 protocol.
+   * Requires @tetherto/wdk-protocol-bridge-usdt0-evm.
+   */
+  async bridge(fromChain: Chain, toChain: Chain, symbol: TokenSymbol, amount: bigint): Promise<TransactionResult> {
+    this.ensureInitialized();
+
+    try {
+      const account = await this.getAccount(fromChain);
+      const address = await account.getAddress();
+
+      // Resolve token address on the source chain
+      const token = getTokenAddress(fromChain, symbol);
+      if (!token) return { success: false, error: `No token address for ${symbol} on ${fromChain}` };
+
+      const { default: Usdt0ProtocolEvm } = await import('@tetherto/wdk-protocol-bridge-usdt0-evm');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WDK account satisfies interface at runtime
+      const bridgeProtocol = new Usdt0ProtocolEvm(account as any, { bridgeMaxFee: 1000000n });
+
+      const result = await bridgeProtocol.bridge({
+        targetChain: toChain,
+        recipient: address,
+        token,
+        amount,
+      });
+      return { success: true, txHash: result.hash };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown bridge error';
+      return { success: false, error: message };
+    }
   }
 
-  async deposit(_chain: Chain, _symbol: TokenSymbol, _amount: bigint, _protocol: string): Promise<TransactionResult> {
-    // TODO: implement via WDK lending modules when available
-    return { success: false, error: 'Real WDK yield deposit not yet implemented' };
+  /**
+   * Deposit tokens into Aave lending pool.
+   * Requires @tetherto/wdk-protocol-lending-aave-evm.
+   */
+  async deposit(chain: Chain, symbol: TokenSymbol, amount: bigint, _protocol: string): Promise<TransactionResult> {
+    this.ensureInitialized();
+
+    try {
+      const account = await this.getAccount(chain);
+
+      const token = getTokenAddress(chain, symbol);
+      if (!token) return { success: false, error: `No token address for ${symbol} on ${chain}` };
+
+      const { default: AaveProtocolEvm } = await import('@tetherto/wdk-protocol-lending-aave-evm');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WDK account satisfies interface at runtime
+      const aave = new AaveProtocolEvm(account as any);
+
+      const result = await aave.supply({ token, amount });
+      return { success: true, txHash: result.hash };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown deposit error';
+      return { success: false, error: message };
+    }
   }
 
-  async withdraw(_chain: Chain, _symbol: TokenSymbol, _amount: bigint, _protocol: string): Promise<TransactionResult> {
-    // TODO: implement via WDK lending modules when available
-    return { success: false, error: 'Real WDK yield withdraw not yet implemented' };
+  /**
+   * Withdraw tokens from Aave lending pool.
+   * Requires @tetherto/wdk-protocol-lending-aave-evm.
+   */
+  async withdraw(chain: Chain, symbol: TokenSymbol, amount: bigint, _protocol: string): Promise<TransactionResult> {
+    this.ensureInitialized();
+
+    try {
+      const account = await this.getAccount(chain);
+
+      const token = getTokenAddress(chain, symbol);
+      if (!token) return { success: false, error: `No token address for ${symbol} on ${chain}` };
+
+      const { default: AaveProtocolEvm } = await import('@tetherto/wdk-protocol-lending-aave-evm');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- WDK account satisfies interface at runtime
+      const aave = new AaveProtocolEvm(account as any);
+
+      const result = await aave.withdraw({ token, amount });
+      return { success: true, txHash: result.hash };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown withdraw error';
+      return { success: false, error: message };
+    }
   }
 
   // ── ERC-8004 Identity & Reputation ──
 
-  async registerIdentity(_chain: Chain, _agentURI: string): Promise<IdentityOperationResult> {
-    // TODO: implement via ABI encoder + WDK sendTransaction({to, data, value})
-    return { success: false, error: 'Real WDK ERC-8004 registerIdentity not yet implemented' };
+  /**
+   * Register an on-chain ERC-8004 identity by calling IdentityRegistry.register(agentURI).
+   * Mints an ERC-721 NFT. Parses the Transfer event to extract the agentId.
+   */
+  async registerIdentity(chain: Chain, agentURI: string): Promise<IdentityOperationResult> {
+    this.ensureInitialized();
+
+    try {
+      const account = await this.getAccount(chain);
+      const calldata = encodeRegister(agentURI);
+
+      const tx = await account.sendTransaction({
+        to: ERC8004_CONTRACTS.identityRegistry,
+        value: 0n,
+        data: calldata,
+      });
+
+      // Parse agentId from the Transfer event in the tx receipt
+      let agentId: string | undefined;
+      const receipt = await account.getTransactionReceipt(tx.hash);
+      if (receipt?.logs) {
+        for (const log of receipt.logs) {
+          // ERC-721 Transfer(address from, address to, uint256 tokenId)
+          // tokenId is the 3rd indexed topic (topics[3])
+          if (log.topics[0] === TRANSFER_EVENT_TOPIC && log.topics[3]) {
+            agentId = decodeUint256(log.topics[3]);
+            break;
+          }
+        }
+      }
+
+      return { success: true, txHash: tx.hash, agentId };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown registerIdentity error';
+      return { success: false, error: message };
+    }
   }
 
-  async setAgentWallet(_chain: Chain, _agentId: string, _deadline: number): Promise<IdentityOperationResult> {
-    // TODO: implement EIP-712 signing + WDK sendTransaction
-    return { success: false, error: 'Real WDK ERC-8004 setAgentWallet not yet implemented' };
+  /**
+   * Set the agent's wallet address on the IdentityRegistry.
+   * Requires EIP-712 signing via WDK's signer.
+   *
+   * The agent's EOA is both the NFT owner and the wallet being set,
+   * so it signs the EIP-712 data with its own key and sends the tx.
+   */
+  async setAgentWallet(chain: Chain, agentId: string, deadline: number): Promise<IdentityOperationResult> {
+    this.ensureInitialized();
+
+    try {
+      const account = await this.getAccount(chain);
+      const address = await account.getAddress();
+
+      // Build EIP-712 message
+      const message = {
+        agentId: BigInt(agentId),
+        newWallet: address,
+        deadline: BigInt(deadline),
+        nonce: 0n, // First wallet set — nonce 0
+      };
+
+      // Sign via WDK account's internal signer (EIP-712 typed data)
+      let signature: string;
+
+      if (account._signer && typeof account._signer.signTypedData === 'function') {
+        // WDK signer has signTypedData (ethers pattern)
+        signature = await account._signer.signTypedData(
+          EIP712_DOMAIN as unknown as Record<string, unknown>,
+          SET_AGENT_WALLET_TYPES as unknown as Record<string, unknown>,
+          message as unknown as Record<string, unknown>,
+        );
+      } else {
+        return {
+          success: false,
+          error: 'WDK account signer does not support EIP-712 signTypedData — required for setAgentWallet',
+        };
+      }
+
+      const calldata = encodeSetAgentWallet(agentId, address, deadline, signature);
+
+      const tx = await account.sendTransaction({
+        to: ERC8004_CONTRACTS.identityRegistry,
+        value: 0n,
+        data: calldata,
+      });
+
+      return { success: true, txHash: tx.hash };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown setAgentWallet error';
+      return { success: false, error: message };
+    }
   }
 
+  /**
+   * Submit on-chain reputation feedback to the ReputationRegistry.
+   */
   async giveFeedback(
-    _chain: Chain, _targetAgentId: string, _value: number, _valueDecimals: number,
-    _tag1: string, _tag2: string, _endpoint: string, _feedbackURI: string, _feedbackHash: string,
+    chain: Chain, targetAgentId: string, value: number, valueDecimals: number,
+    tag1: string, tag2: string, endpoint: string, feedbackURI: string, feedbackHash: string,
   ): Promise<TransactionResult> {
-    // TODO: implement via ABI encoder + WDK sendTransaction
-    return { success: false, error: 'Real WDK ERC-8004 giveFeedback not yet implemented' };
+    this.ensureInitialized();
+
+    try {
+      const account = await this.getAccount(chain);
+      const calldata = encodeGiveFeedback(
+        targetAgentId, value, valueDecimals, tag1, tag2, endpoint, feedbackURI, feedbackHash,
+      );
+
+      const tx = await account.sendTransaction({
+        to: ERC8004_CONTRACTS.reputationRegistry,
+        value: 0n,
+        data: calldata,
+      });
+
+      return { success: true, txHash: tx.hash };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown giveFeedback error';
+      return { success: false, error: msg };
+    }
   }
 
-  async getOnChainReputation(_chain: Chain, _agentId: string): Promise<OnChainReputation> {
-    // TODO: implement via eth_call + ABI decoder
-    return { feedbackCount: 0, totalValue: '0', valueDecimals: 0 };
+  /**
+   * Query on-chain reputation from the ReputationRegistry via eth_call.
+   * This is a read-only call (no gas, no tx).
+   */
+  async getOnChainReputation(chain: Chain, agentId: string): Promise<OnChainReputation> {
+    this.ensureInitialized();
+
+    try {
+      const calldata = encodeGetSummary(agentId);
+      const resultHex = await this.ethCall(
+        chain,
+        ERC8004_CONTRACTS.reputationRegistry,
+        calldata,
+      );
+      const summary = decodeSummaryResult(resultHex);
+      return {
+        feedbackCount: summary.count,
+        totalValue: summary.totalValue,
+        valueDecimals: summary.valueDecimals,
+      };
+    } catch {
+      // Read-only query — return defaults on failure
+      return { feedbackCount: 0, totalValue: '0', valueDecimals: 0 };
+    }
+  }
+
+  // ── Private Helpers ──
+
+  /** Get the WDK account for a given chain. */
+  private async getAccount(chain: Chain): Promise<WdkAccount> {
+    this.ensureInitialized();
+    // wdk is guaranteed non-null after ensureInitialized
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    return this.wdk!.getAccount(chain, 0);
+  }
+
+  /**
+   * Make a raw JSON-RPC eth_call to a contract (read-only, no gas).
+   * Used for ERC-8004 reputation queries.
+   */
+  private async ethCall(chain: Chain, to: string, data: string): Promise<string> {
+    const rpcUrl = this.rpcUrls.get(chain);
+    if (!rpcUrl) throw new Error(`No RPC URL configured for chain: ${chain}`);
+
+    const response = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_call',
+        params: [{ to, data }, 'latest'],
+      }),
+    });
+
+    const result = await response.json() as { result?: string; error?: { message: string } };
+    if (result.error) throw new Error(`eth_call failed: ${result.error.message}`);
+    return result.result ?? '0x';
   }
 
   private ensureInitialized(): void {
