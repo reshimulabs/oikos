@@ -369,12 +369,15 @@ ENVEOF
 
 check_openclaw() {
   if command -v openclaw &>/dev/null; then
-    info "OpenClaw detected — linking wallet skill..."
-    OPENCLAW_SKILLS="${HOME}/.openclaw/skills"
-    if [ -d "$OPENCLAW_SKILLS" ]; then
-      ln -sf "$(pwd)/skills/wdk-wallet" "$OPENCLAW_SKILLS/wdk-wallet" 2>/dev/null && \
-        success "Linked skills/wdk-wallet to OpenClaw" || \
-        warn "Could not link skill (non-critical)"
+    info "OpenClaw detected — installing wallet skill..."
+    # OpenClaw loads personal skills from ~/.agents/skills/
+    # (symlinks outside root are blocked by security policy)
+    AGENTS_SKILLS="${HOME}/.agents/skills"
+    mkdir -p "$AGENTS_SKILLS"
+    if cp -R "$(pwd)/skills/wdk-wallet" "$AGENTS_SKILLS/wdk-wallet" 2>/dev/null; then
+      success "Installed skills/wdk-wallet to ~/.agents/skills/"
+    else
+      warn "Could not install skill (non-critical)"
     fi
   fi
 }

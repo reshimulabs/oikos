@@ -14,13 +14,151 @@ tags:
   - multi-asset
   - swarm
   - reputation
-requires:
-  - process-isolation
 ---
 
 # WDK Wallet Skill
 
 You have access to a self-custodial cryptocurrency wallet powered by Tether's WDK (Wallet Development Kit). The wallet runs in a **separate isolated process** with its own policy engine — even if you are compromised, the wallet enforces constraints independently.
+
+## How to Call Wallet Tools
+
+The wallet exposes an MCP (Model Context Protocol) endpoint at `http://127.0.0.1:3420/mcp`. All operations use JSON-RPC 2.0 via POST requests.
+
+**To call any wallet tool, use curl:**
+
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"TOOL_NAME","arguments":{ARGS}}}'
+```
+
+Replace `TOOL_NAME` and `ARGS` with one of the tools below.
+
+## Available Tools
+
+### Query Tools (read-only, always safe)
+
+**Check all balances:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wallet_balance_all","arguments":{}}}'
+```
+
+**Check single asset balance:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wallet_balance","arguments":{"chain":"ethereum","symbol":"USDT"}}}'
+```
+- `chain`: "ethereum" | "polygon" | "bitcoin" | "arbitrum"
+- `symbol`: "USDT" | "XAUT" | "USAT" | "BTC" | "ETH"
+
+**Get wallet address:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wallet_address","arguments":{"chain":"ethereum"}}}'
+```
+
+**Check policy status (remaining budgets, cooldowns):**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"policy_status","arguments":{}}}'
+```
+
+**Query audit log (recent transactions):**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"audit_log","arguments":{"limit":10}}}'
+```
+
+**Get agent state:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"agent_state","arguments":{}}}'
+```
+
+**Get swarm state (peers, rooms, announcements):**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"swarm_state","arguments":{}}}'
+```
+
+**Get ERC-8004 identity state:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"identity_state","arguments":{}}}'
+```
+
+**Query on-chain reputation:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_reputation","arguments":{"agentId":"1"}}}'
+```
+
+### Proposal Tools (write — all go through PolicyEngine)
+
+**Propose a payment:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"propose_payment","arguments":{"amount":"1000000","symbol":"USDT","chain":"ethereum","to":"0xRecipientAddress","reason":"Why this payment","confidence":0.85}}}'
+```
+
+**Propose a swap:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"propose_swap","arguments":{"amount":"5000000","symbol":"USDT","toSymbol":"XAUT","chain":"ethereum","reason":"Portfolio rebalance","confidence":0.85}}}'
+```
+
+**Propose a bridge:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"propose_bridge","arguments":{"amount":"1000000","symbol":"USDT","fromChain":"ethereum","toChain":"arbitrum","reason":"Lower gas fees","confidence":0.9}}}'
+```
+
+**Propose yield deposit/withdrawal:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"propose_yield","arguments":{"amount":"2000000","symbol":"USDT","chain":"ethereum","protocol":"aave-v3","action":"deposit","reason":"Earn yield on idle USDT","confidence":0.8}}}'
+```
+
+**Post swarm announcement:**
+```bash
+curl -s -X POST http://127.0.0.1:3420/mcp \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"swarm_announce","arguments":{"category":"service","title":"Data Feed","description":"Live price data","minPrice":"100000","maxPrice":"500000","symbol":"USDT"}}}'
+```
+
+## REST API (alternative)
+
+The dashboard also exposes REST endpoints at `http://127.0.0.1:3420`:
+
+- `GET /api/health` — health check
+- `GET /api/balances` — all balances
+- `GET /api/addresses` — wallet addresses
+- `GET /api/state` — agent brain state
+- `GET /api/policies` — policy status
+- `GET /api/audit?limit=20` — audit log
+- `GET /api/swarm` — swarm state
+- `GET /api/economics` — revenue/costs/sustainability
+- `GET /api/prices` — live asset prices
+- `GET /api/valuation` — portfolio USD valuation
+- `GET /api/identity` — ERC-8004 identity
+- `GET /api/reputation/onchain` — on-chain reputation
+- `GET /agent-card.json` — ERC-8004 agent card
+
+Example: `curl -s http://127.0.0.1:3420/api/balances | jq .`
 
 ## Supported Assets
 
@@ -32,158 +170,9 @@ You have access to a self-custodial cryptocurrency wallet powered by Tether's WD
 | BTC | Bitcoin | Native | Bitcoin |
 | ETH | Ethereum | Native | Ethereum |
 
-## Capabilities
-
-### 1. Propose Payments
-
-Send tokens to a recipient address. All payments go through the PolicyEngine before execution.
-
-```json
-{
-  "type": "payment",
-  "amount": "2000000",
-  "symbol": "USDT",
-  "chain": "ethereum",
-  "to": "0xRecipientAddress",
-  "reason": "Payment for data feed service",
-  "confidence": 0.85,
-  "strategy": "direct-payment"
-}
-```
-
-### 2. Propose Swaps
-
-Trade between token pairs (e.g., USDt to XAUt for portfolio rebalancing).
-
-```json
-{
-  "type": "swap",
-  "amount": "5000000",
-  "symbol": "USDT",
-  "toSymbol": "XAUT",
-  "chain": "ethereum",
-  "reason": "Rebalance: USDT overweight, XAUT underweight",
-  "confidence": 0.80,
-  "strategy": "portfolio-rebalance"
-}
-```
-
-### 3. Propose Bridges
-
-Move tokens cross-chain (e.g., Ethereum to Arbitrum for lower gas).
-
-```json
-{
-  "type": "bridge",
-  "amount": "10000000",
-  "symbol": "USDT",
-  "chain": "ethereum",
-  "fromChain": "ethereum",
-  "toChain": "arbitrum",
-  "reason": "Move to Arbitrum for lower gas fees",
-  "confidence": 0.90,
-  "strategy": "gas-optimization"
-}
-```
-
-### 4. Propose Yield Operations
-
-Deposit idle assets in lending protocols, or withdraw from yield positions.
-
-```json
-{
-  "type": "yield",
-  "amount": "5000000",
-  "symbol": "USDT",
-  "chain": "ethereum",
-  "protocol": "aave-v3",
-  "action": "deposit",
-  "reason": "Deposit idle USDT for yield",
-  "confidence": 0.75,
-  "strategy": "yield-optimization"
-}
-```
-
-### 5. Query Balances
-
-Check available funds across all chains and assets.
-
-- `query_balance(chain, symbol)` — single asset balance
-- `query_balance_all()` — all balances across all chains
-
-Returns: `{ chain, symbol, balance (smallest unit), formatted (human-readable) }`
-
-### 6. Query Addresses
-
-Get wallet addresses for receiving funds on any supported chain.
-
-### 7. Query Policies
-
-Check current policy status: remaining budgets, cooldown timers, confidence thresholds.
-
-### 8. Query Audit Log
-
-Review past transactions and decisions. Each entry includes: proposal, policy evaluation, execution result, timestamp.
-
-### 9. ERC-8004 On-Chain Identity
-
-If enabled (`ERC8004_ENABLED=true`), the agent has an on-chain identity:
-
-- `register_identity(agentURI)` — Mint ERC-721 identity NFT
-- `set_agent_wallet(agentId, deadline)` — Link wallet to on-chain identity
-- `query_reputation(agentId)` — Get on-chain feedback count and total score
-- `propose_feedback(targetAgentId, value, tags)` — Submit peer reputation (goes through PolicyEngine)
-
-### 10. Swarm Trading
-
-When connected to the Oikos agent swarm:
-
-- **Post announcements** — List services, auctions, or requests on the public board
-- **Bid on peer offers** — Enter private negotiation rooms
-- **Settle payments** — All swarm payments go through PolicyEngine
-- **Track economics** — Revenue, costs, sustainability score
-
-## What You CANNOT Do
-
-- Modify wallet policies (they are immutable for the process lifetime)
-- Access private keys or seed phrases (they exist only in the wallet isolate)
-- Bypass spending limits or cooldowns
-- Send funds without policy approval
-- Retry failed transactions (submit a new proposal instead)
-
-## Decision Output Format
-
-When you decide to take a financial action, produce this JSON:
-
-```json
-{
-  "shouldPay": true,
-  "reason": "Short explanation of why",
-  "confidence": 0.85,
-  "amount": "2000000",
-  "symbol": "USDT",
-  "chain": "ethereum",
-  "to": "0x...",
-  "strategy": "strategy-name",
-  "operationType": "payment",
-  "reasoning": "Full chain of thought..."
-}
-```
-
-**Fields:**
-- `shouldPay` — boolean, whether to propose any financial action
-- `confidence` — 0.0 to 1.0, your certainty (policy may reject low confidence)
-- `amount` — string, amount in smallest unit (1 USDT = "1000000", 6 decimals)
-- `symbol` — "USDT" | "XAUT" | "USAT" | "BTC" | "ETH"
-- `chain` — "ethereum" | "polygon" | "bitcoin" | "arbitrum"
-- `operationType` — "payment" | "swap" | "bridge" | "yield"
-- `toSymbol` — for swaps, the target token
-- `fromChain` / `toChain` — for bridges
-- `protocol` / `action` — for yield operations
-
 ## Policy Rules
 
-Your proposals are checked against these rule types:
+Proposals are checked against:
 
 | Rule | Description |
 |------|-------------|
@@ -194,12 +183,20 @@ Your proposals are checked against these rule types:
 | `require_confidence` | Minimum confidence score required |
 | `whitelist_recipients` | Only approved recipient addresses |
 
-If **any** rule is violated, the proposal is rejected and no funds move. You will receive the violation list in the response and can adjust your next proposal accordingly.
+If **any** rule is violated, the proposal is rejected and no funds move.
+
+## What You CANNOT Do
+
+- Modify wallet policies (immutable for process lifetime)
+- Access private keys or seed phrases (wallet isolate only)
+- Bypass spending limits or cooldowns
+- Send funds without policy approval
+- Retry failed transactions (submit a new proposal instead)
 
 ## Security Model
 
-- **Process isolation**: Wallet runs in a separate Bare Runtime process. No shared memory or files.
-- **Structured IPC**: Communication is via typed JSON-lines over stdin/stdout. No raw access.
-- **Append-only audit**: Every proposal (approved, rejected, or malformed) is permanently recorded.
-- **Fail closed**: Any ambiguity = no funds move.
-- **Deterministic policy**: Same proposal + same state = same decision. No randomness.
+- **Process isolation**: Wallet runs in a separate Bare Runtime process
+- **Structured IPC**: JSON-lines over stdin/stdout
+- **Append-only audit**: Every proposal permanently recorded
+- **Fail closed**: Ambiguity = no funds move
+- **Deterministic policy**: Same proposal + same state = same decision

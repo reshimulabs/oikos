@@ -33,6 +33,22 @@ ROADMAP.md
 BUILD-LOG.md
 CLAUDE CODE PROMPT v4 FINAL.pdf
 
+# OpenClaw state (agent sessions, auth keys)
+.openclaw/
+
+# Claude Code state
+.claude/
+
+# OpenClaw workspace defaults (auto-generated)
+AGENTS.md
+SOUL.md
+HEARTBEAT.md
+IDENTITY.md
+USER.md
+
+# Runtime copies
+policies.json
+
 # IDE
 .vscode/
 .idea/
