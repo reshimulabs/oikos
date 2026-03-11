@@ -2,13 +2,12 @@
 /**
  * Oikos — Pear Runtime Main Process
  *
- * Spawns two child processes:
- * 1. Wallet Isolate (Bare Runtime) — keys, policy, signing
- * 2. Agent Brain (Node.js) — LLM reasoning, swarm, dashboard
+ * Spawns oikos-app as a Node.js sidecar:
+ * - Wallet Isolate (spawned by oikos-app via IPC)
+ * - MCP + REST + CLI endpoints
+ * - Swarm, companion, events, pricing, RGB
  *
- * The Brain spawns the Wallet Isolate internally via IPC,
- * so we only need to spawn the Brain here.
- *
+ * Agent-agnostic: any agent connects via MCP at :3420/mcp.
  * Auth: 32-byte random token passed via CLI for session security.
  */
 import Runtime from 'pear-electron'
@@ -20,18 +19,18 @@ import { randomBytes } from 'hypercore-crypto'
 const DASHBOARD_PORT = 3420
 const token = b4a.toString(randomBytes(32), 'hex')
 
-console.log('[oikos] Starting Agent Brain...')
+console.log('[oikos] Starting Oikos App...')
 
-// Spawn the Agent Brain as a Node.js sidecar
-// Brain boots the Wallet Isolate internally via child_process
+// Spawn oikos-app as a Node.js sidecar
+// oikos-app boots the Wallet Isolate internally via child_process
 const brain = spawn('node', [
-  'agent-brain/dist/src/main.js',
+  'oikos-app/dist/src/main.js',
 ], {
   stdio: ['ignore', 'pipe', 'pipe'],
   env: {
+    OIKOS_MODE: 'mock',
     DASHBOARD_PORT: String(DASHBOARD_PORT),
     SESSION_TOKEN: token,
-    MOCK_LLM: 'true',
     MOCK_EVENTS: 'true',
     MOCK_SWARM: 'true',
   },

@@ -68,7 +68,7 @@ curl -s http://127.0.0.1:3420/api/policies
 | `wallet_address` | Wallet address for a chain (args: `chain`) |
 | `policy_status` | Remaining budgets, cooldown timers |
 | `audit_log` | Recent transactions (args: `limit`) |
-| `agent_state` | Agent brain state and reasoning |
+| `agent_state` | Agent connection status and infrastructure state |
 | `swarm_state` | P2P swarm peers, rooms, announcements |
 | `identity_state` | ERC-8004 on-chain identity |
 | `query_reputation` | On-chain reputation score (args: `agentId`) |
@@ -146,17 +146,16 @@ Every write proposal is checked against these rules:
 - Bypass spending limits or cooldowns
 - Retry failed transactions (submit a new proposal instead)
 
-## Standalone Gateway Mode
+## Agent-Agnostic Architecture
 
-The wallet gateway can run independently without the agent brain:
+Oikos is agent-agnostic infrastructure. Start oikos-app, then connect any agent:
 
 ```bash
-npm run start:gateway
+npm start   # Starts oikos-app (wallet + swarm + events + MCP)
 ```
 
-In this mode, all wallet tools (balances, payments, swaps, bridges, yield, policies, audit) work normally. Brain-dependent tools (`agent_state`, `identity_state`, `swarm_state`, `swarm_announce`) return `{ status: "no_agent_brain_connected" }`.
-
-This is useful for external agent frameworks (OpenClaw, LangChain, etc.) that want direct wallet access without the Oikos brain.
+All tools work out of the box. Your agent connects via MCP at `POST http://127.0.0.1:3420/mcp`.
+This works with OpenClaw, Claude, LangChain, or any agent framework.
 
 ## Security Model
 

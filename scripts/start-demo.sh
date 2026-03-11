@@ -2,15 +2,16 @@
 #
 # Oikos Demo — One-command start.
 #
-# Boots the full dual-process system in mock mode:
+# Boots oikos-app in mock mode (agent-agnostic infrastructure):
 # - Wallet Isolate with mock wallet (no blockchain)
-# - Agent Brain with mock LLM (deterministic demo sequence)
 # - Mock Swarm (2 simulated peer agents: AlphaBot, BetaBot)
 # - Mock Events (3-min simulated event stream)
 # - Dashboard at http://127.0.0.1:3420
 # - ERC-8004 identity (mock mode)
+# - MCP + REST + CLI for any agent to connect
 #
 # Zero API keys required. Zero blockchain access. Zero setup friction.
+# Connect your own agent via MCP at POST http://127.0.0.1:3420/mcp
 #
 # Usage:
 #   ./scripts/start-demo.sh              # Auto-detect runtime
@@ -46,7 +47,7 @@ if [[ -z "$WALLET_RUNTIME" ]]; then
 fi
 
 # Build if needed
-if [[ ! -f "$PROJECT_DIR/wallet-isolate/dist/src/main.js" ]] || [[ ! -f "$PROJECT_DIR/wallet-gateway/dist/src/main.js" ]] || [[ ! -f "$PROJECT_DIR/agent-brain/dist/src/main.js" ]]; then
+if [[ ! -f "$PROJECT_DIR/wallet-isolate/dist/src/main.js" ]] || [[ ! -f "$PROJECT_DIR/oikos-app/dist/src/main.js" ]]; then
   echo "[oikos] Building project..."
   cd "$PROJECT_DIR"
   npm run build 2>&1 | tail -5
@@ -66,7 +67,7 @@ echo "  ║                                                           ║"
 echo "  ║   Oikos — Sovereign Agent Wallet Protocol                  ║"
 echo "  ║                                                           ║"
 echo "  ║   Wallet:    ${WALLET_RUNTIME} (mock, no real blockchain)            ║"
-echo "  ║   LLM:       mock (8-decision deterministic cycle)        ║"
+echo "  ║   Agent:     connect yours via MCP/REST/CLI               ║"
 echo "  ║   Swarm:     mock (2 peers: AlphaBot, BetaBot)            ║"
 echo "  ║   Events:    mock (3-min simulated stream)                ║"
 echo "  ║   Identity:  ERC-8004 (mock mode)                         ║"
@@ -95,4 +96,4 @@ exec env \
   AUDIT_LOG_PATH="./audit-demo.jsonl" \
   AGENT_NAME="oikos-demo-agent" \
   AGENT_CAPABILITIES="payment,swap,bridge,yield,analysis,price-feed" \
-  node agent-brain/dist/src/main.js
+  node oikos-app/dist/src/main.js
