@@ -20,6 +20,8 @@ import { getDemoCreators, getDefaultCreator } from './creators/registry.js';
 import { PricingService } from './pricing/client.js';
 import { resolve } from 'path';
 import type { OikosServices, IdentityState, CompanionInstruction, SwarmInterface } from './types.js';
+import { createBrainAdapter } from './brain/adapter.js';
+import type { ChatMessage } from './brain/adapter.js';
 import type { SwarmCoordinatorInterface, AgentCapability } from './swarm/types.js';
 import type { CompanionCoordinator, CompanionStateProvider } from './companion/coordinator.js';
 
@@ -163,6 +165,8 @@ async function main(): Promise<void> {
       if (instructions.length > 50) instructions.splice(0, instructions.length - 50);
     });
 
+    // Chat handler registered after brain adapter is created (deferred in step 9)
+
     await companion.start();
     console.error(`[oikos] Companion: listening for owner`);
   }
@@ -212,7 +216,16 @@ async function main(): Promise<void> {
     console.error(`[oikos] RGB transport bridge: http://127.0.0.1:${config.rgbTransportPort}`);
   }
 
-  // 9. Assemble services
+  // 9. Initialize brain adapter (chat bridge)
+  const brain = createBrainAdapter({
+    type: config.brainType,
+    chatUrl: config.brainChatUrl,
+    model: config.brainModel,
+  });
+  const chatMessages: ChatMessage[] = [];
+  console.error(`[oikos] Brain: ${brain.name} adapter`);
+
+  // 10. Assemble services
   const services: OikosServices = {
     wallet,
     pricing,
@@ -221,16 +234,50 @@ async function main(): Promise<void> {
     identity,
     companionConnected: companion?.isConnected() ?? false,
     instructions,
+    brain,
+    chatMessages,
   };
 
-  // Update companion status dynamically
+  // 11. Register companion chat handler (now that brain is available)
+  if (companion && brain) {
+    companion.onChat(async (text: string) => {
+      try {
+        const { buildWalletContext } = await import('./brain/adapter.js');
+        const context = await buildWalletContext(services);
+        const reply = await brain.chat(text, context);
+
+        // Store both messages in history
+        const humanMsg: ChatMessage = {
+          id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          text,
+          from: 'human',
+          timestamp: Date.now(),
+        };
+        const agentMsg: ChatMessage = {
+          id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          text: reply,
+          from: 'agent',
+          timestamp: Date.now(),
+        };
+        chatMessages.push(humanMsg, agentMsg);
+        if (chatMessages.length > 100) chatMessages.splice(0, chatMessages.length - 100);
+
+        return { reply, brainName: brain.name };
+      } catch (err) {
+        console.error(`[oikos] Chat error: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+      }
+    });
+  }
+
+  // 12. Update companion status dynamically
   if (companion) {
     setInterval(() => {
       services.companionConnected = companion?.isConnected() ?? false;
     }, 1000);
   }
 
-  // 10. Start dashboard (Express: REST + MCP + static UI)
+  // 12. Start dashboard (Express: REST + MCP + static UI)
   createDashboard(services, config.dashboardPort);
 
   console.error('[oikos] Oikos App ready.');

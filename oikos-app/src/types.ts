@@ -8,6 +8,7 @@
 import type { WalletIPCClient } from './ipc/client.js';
 import type { EventBus } from './events/bus.js';
 import type { PricingService } from './pricing/client.js';
+import type { BrainAdapter, ChatMessage } from './brain/adapter.js';
 
 /** Swarm announcement posting options */
 export interface SwarmAnnounceOpts {
@@ -50,4 +51,8 @@ export interface OikosServices {
   identity: IdentityState;
   companionConnected: boolean;
   instructions: CompanionInstruction[];
+  /** Brain adapter for chat (agent-agnostic) */
+  brain: BrainAdapter | null;
+  /** Chat conversation history */
+  chatMessages: ChatMessage[];
 }

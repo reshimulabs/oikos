@@ -27,6 +27,7 @@ import type {
   CompanionAgentReasoning,
   CompanionPolicyUpdate,
   CompanionExecutionNotify,
+  CompanionChatReply,
 } from './types.js';
 
 /** State provider — decoupled from any specific brain implementation */
@@ -63,6 +64,8 @@ export class CompanionCoordinator {
 
   /** Instruction handler — set by main.ts to queue instructions */
   private onInstructionHandler: ((text: string) => void) | null = null;
+  /** Chat handler — set by main.ts to forward to brain and get reply */
+  private onChatHandler: ((text: string) => Promise<{ reply: string; brainName: string } | null>) | null = null;
 
   constructor(
     _wallet: WalletIPCClient,
@@ -87,6 +90,11 @@ export class CompanionCoordinator {
   /** Register instruction handler */
   onInstruction(handler: (text: string) => void): void {
     this.onInstructionHandler = handler;
+  }
+
+  /** Register chat handler — called when instruction arrives, forwards to brain, returns reply */
+  onChat(handler: (text: string) => Promise<{ reply: string; brainName: string } | null>): void {
+    this.onChatHandler = handler;
   }
 
   /** Start listening for companion connections */
@@ -219,6 +227,22 @@ export class CompanionCoordinator {
           console.error(`[companion] Instruction: "${msg.text}"`);
           if (this.onInstructionHandler) {
             this.onInstructionHandler(msg.text);
+          }
+          // Forward to brain and send reply back via protomux
+          if (this.onChatHandler) {
+            this.onChatHandler(msg.text).then((result) => {
+              if (result) {
+                const reply: CompanionChatReply = {
+                  type: 'chat_reply',
+                  text: result.reply,
+                  brainName: result.brainName,
+                  timestamp: Date.now(),
+                };
+                this.send(reply);
+              }
+            }).catch((err) => {
+              console.error(`[companion] Chat handler error: ${err instanceof Error ? err.message : String(err)}`);
+            });
           }
           break;
         case 'approval_response':

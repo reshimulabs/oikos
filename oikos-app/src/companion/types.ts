@@ -60,6 +60,14 @@ export interface CompanionApprovalRequest {
   timestamp: number;
 }
 
+/** Chat reply from the brain (agent response to human message) */
+export interface CompanionChatReply {
+  type: 'chat_reply';
+  text: string;
+  brainName: string;
+  timestamp: number;
+}
+
 // ── Companion → Agent (Instructions) ──
 
 export interface CompanionInstruction {
@@ -89,7 +97,8 @@ export type AgentToCompanionMessage =
   | CompanionSwarmStatus
   | CompanionPolicyUpdate
   | CompanionExecutionNotify
-  | CompanionApprovalRequest;
+  | CompanionApprovalRequest
+  | CompanionChatReply;
 
 /** Messages sent FROM the companion TO the agent */
 export type CompanionToAgentMessage =

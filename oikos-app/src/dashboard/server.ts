@@ -18,6 +18,8 @@ import { dirname, join } from 'path';
 import type { OikosServices } from '../types.js';
 import type { TokenSymbol, Chain } from '../ipc/types.js';
 import { mountMCP } from '../mcp/server.js';
+import { buildWalletContext } from '../brain/adapter.js';
+import type { ChatMessage } from '../brain/adapter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -383,6 +385,93 @@ export function createDashboard(
       }
     } catch {
       res.status(500).json({ error: 'Failed to submit proposal' });
+    }
+  });
+
+  // ── Agent Chat Bridge (agent-agnostic) ──
+
+  /** Chat history — poll for conversation */
+  app.get('/api/agent/chat/history', (req, res) => {
+    const limit = parseInt(String(req.query['limit'] ?? '50'), 10);
+    res.json({ messages: services.chatMessages.slice(-limit) });
+  });
+
+  /**
+   * POST /api/agent/chat — THE agent-agnostic bridge contract.
+   *
+   * Body: { message: string, from?: 'companion' | 'dashboard' }
+   * Response: { reply: string, from: 'agent', brainName: string }
+   *
+   * Oikos doesn't care what's behind BRAIN_CHAT_URL.
+   * Swap the brain, keep the wallet.
+   */
+  app.post('/api/agent/chat', async (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const message = String(body['message'] ?? '').trim();
+    const from = String(body['from'] ?? 'dashboard');
+
+    if (!message) {
+      res.status(400).json({ error: 'message required' });
+      return;
+    }
+
+    if (!services.brain) {
+      res.status(503).json({ error: 'No brain adapter configured. Set BRAIN_TYPE in env.' });
+      return;
+    }
+
+    // Store human message
+    const humanMsg: ChatMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text: message,
+      from: 'human',
+      timestamp: Date.now(),
+    };
+    services.chatMessages.push(humanMsg);
+
+    console.error(`[chat] ${from}: "${message.slice(0, 80)}"`);
+
+    try {
+      // Build wallet context and call brain
+      const context = await buildWalletContext(services);
+      const reply = await services.brain.chat(message, context);
+
+      // Store agent reply
+      const agentMsg: ChatMessage = {
+        id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: reply,
+        from: 'agent',
+        timestamp: Date.now(),
+      };
+      services.chatMessages.push(agentMsg);
+
+      // Keep last 100 messages
+      if (services.chatMessages.length > 100) {
+        services.chatMessages.splice(0, services.chatMessages.length - 100);
+      }
+
+      console.error(`[chat] agent (${services.brain.name}): "${reply.slice(0, 80)}"`);
+
+      res.json({
+        reply,
+        from: 'agent',
+        brainName: services.brain.name,
+        messageId: agentMsg.id,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[chat] Brain error: ${msg}`);
+
+      // Store error as agent message so UI shows it
+      const errorMsg: ChatMessage = {
+        id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: `[Brain error: ${msg}]`,
+        from: 'agent',
+        timestamp: Date.now(),
+      };
+      services.chatMessages.push(errorMsg);
+
+      res.status(502).json({ error: `Brain error: ${msg}` });
     }
   });
 

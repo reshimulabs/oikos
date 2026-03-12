@@ -105,6 +105,20 @@ export interface OikosConfig {
 
   /** Port for the RGB transport bridge HTTP server */
   rgbTransportPort: number;
+
+  // ── Brain (Chat Bridge) ──
+
+  /** Brain adapter type: 'ollama' (default), 'http' (OpenClaw/custom), 'mock' */
+  brainType: 'ollama' | 'http' | 'mock';
+
+  /** URL for the brain chat endpoint.
+   *  - ollama: http://127.0.0.1:11434 (default)
+   *  - http: URL of external brain (OpenClaw, custom)
+   */
+  brainChatUrl: string;
+
+  /** LLM model name (for Ollama adapter) */
+  brainModel: string;
 }
 
 function getEnv(key: string, fallback?: string): string {
@@ -163,6 +177,11 @@ export function loadOikosConfig(): OikosConfig {
     // RGB
     rgbEnabled: getEnv('RGB_ENABLED', 'false') === 'true',
     rgbTransportPort: parseInt(getEnv('RGB_TRANSPORT_PORT', '13100'), 10),
+
+    // Brain (Chat Bridge)
+    brainType: getEnv('BRAIN_TYPE', mode === 'mock' ? 'mock' : 'ollama') as 'ollama' | 'http' | 'mock',
+    brainChatUrl: getEnv('BRAIN_CHAT_URL', ''),
+    brainModel: getEnv('BRAIN_MODEL', 'qwen3:8b'),
   };
 }
 
