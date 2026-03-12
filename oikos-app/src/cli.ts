@@ -130,6 +130,192 @@ function out(data: unknown): void {
   console.log(JSON.stringify(data, null, 2));
 }
 
+// ── Setup commands (offline — no running server needed) ──
+
+import { existsSync, mkdirSync, writeFileSync, readFileSync, copyFileSync } from 'fs';
+import { join, resolve as pathResolve } from 'path';
+import { homedir } from 'os';
+
+const OIKOS_DIR = join(homedir(), '.oikos');
+
+async function cmdInit(): Promise<void> {
+  console.log(`\n${BOLD}oikos init${RESET} — Initialize Oikos wallet infrastructure\n`);
+
+  // Create ~/.oikos/
+  if (!existsSync(OIKOS_DIR)) {
+    mkdirSync(OIKOS_DIR, { recursive: true });
+    console.log(`${GREEN}✓${RESET} Created ${OIKOS_DIR}`);
+  } else {
+    console.log(`${DIM}  ${OIKOS_DIR} already exists${RESET}`);
+  }
+
+  // Generate swarm keypair
+  const keypairPath = join(OIKOS_DIR, 'swarm-keypair.json');
+  if (!existsSync(keypairPath)) {
+    try {
+      const { loadOrCreateKeypair } = await import('./swarm/identity.js');
+      const kp = loadOrCreateKeypair(keypairPath);
+      console.log(`${GREEN}✓${RESET} Generated swarm keypair`);
+      console.log(`  Pubkey: ${CYAN}${kp.publicKey.toString('hex').slice(0, 32)}...${RESET}`);
+    } catch {
+      // Fallback: generate with Node.js crypto
+      const ed = await import('crypto');
+      const kp = ed.generateKeyPairSync('ed25519');
+      const pub = kp.publicKey.export({ type: 'spki', format: 'der' }).subarray(-32);
+      const sec = kp.privateKey.export({ type: 'pkcs8', format: 'der' }).subarray(-32);
+      writeFileSync(keypairPath, JSON.stringify({
+        publicKey: pub.toString('hex'),
+        secretKey: sec.toString('hex'),
+      }));
+      console.log(`${GREEN}✓${RESET} Generated swarm keypair (fallback)`);
+    }
+  } else {
+    const kp = JSON.parse(readFileSync(keypairPath, 'utf-8')) as { publicKey: string };
+    console.log(`${DIM}  Swarm keypair exists: ${kp.publicKey.slice(0, 16)}...${RESET}`);
+  }
+
+  // Copy default policy
+  const policyDest = join(OIKOS_DIR, 'policy.json');
+  if (!existsSync(policyDest)) {
+    const defaultPolicy = pathResolve('..', 'policies.json');
+    if (existsSync(defaultPolicy)) {
+      copyFileSync(defaultPolicy, policyDest);
+      console.log(`${GREEN}✓${RESET} Copied default policy config`);
+    } else {
+      writeFileSync(policyDest, JSON.stringify([{
+        name: 'default',
+        rules: [
+          { type: 'max_amount', amount: '100000000', symbol: 'USDT' },
+          { type: 'cooldown', seconds: 30 },
+          { type: 'confidence_threshold', min: 0.7 },
+        ],
+      }], null, 2));
+      console.log(`${GREEN}✓${RESET} Created minimal policy config`);
+    }
+  } else {
+    console.log(`${DIM}  Policy config exists${RESET}`);
+  }
+
+  // Create audit directory
+  const auditDir = join(OIKOS_DIR, 'audit');
+  if (!existsSync(auditDir)) {
+    mkdirSync(auditDir, { recursive: true });
+    console.log(`${GREEN}✓${RESET} Created audit directory`);
+  }
+
+  // Write agent pubkey for local companion auto-connect
+  if (existsSync(keypairPath)) {
+    const kp = JSON.parse(readFileSync(keypairPath, 'utf-8')) as { publicKey: string };
+    writeFileSync(join(OIKOS_DIR, 'agent-pubkey.txt'), kp.publicKey);
+  }
+
+  console.log(`\n${GREEN}✓ Oikos initialized.${RESET}\n`);
+
+  if (existsSync(keypairPath)) {
+    const kp = JSON.parse(readFileSync(keypairPath, 'utf-8')) as { publicKey: string };
+    console.log(`  ${BOLD}Agent ID${RESET}:   ${kp.publicKey.slice(0, 16)}`);
+  }
+  console.log(`  ${BOLD}Dashboard${RESET}:  http://127.0.0.1:3420`);
+  console.log(`  ${BOLD}MCP${RESET}:        POST http://127.0.0.1:3420/mcp`);
+  console.log(`  ${BOLD}CLI${RESET}:        oikos <command> --json\n`);
+  console.log(`  To start:  ${BOLD}oikos start${RESET}  or  ${BOLD}npm start${RESET}`);
+  console.log(`  To pair:   ${BOLD}oikos pair${RESET}\n`);
+}
+
+async function cmdPair(): Promise<void> {
+  console.log(`\n${BOLD}oikos pair${RESET} — Companion App Pairing\n`);
+
+  const keypairPath = join(OIKOS_DIR, 'swarm-keypair.json');
+  if (!existsSync(keypairPath)) {
+    console.error(`${RED}Error: Run ${BOLD}oikos init${RESET}${RED} first.${RESET}`);
+    process.exit(1);
+  }
+
+  const kp = JSON.parse(readFileSync(keypairPath, 'utf-8')) as { publicKey: string };
+
+  if (jsonOutput) {
+    out({ agentPubkey: kp.publicKey, topicSeed: 'oikos-companion-default' });
+    return;
+  }
+
+  console.log(`  ${BOLD}Agent swarm pubkey:${RESET}`);
+  console.log(`  ${CYAN}${kp.publicKey}${RESET}\n`);
+
+  // Write agent pubkey for local auto-connect
+  writeFileSync(join(OIKOS_DIR, 'agent-pubkey.txt'), kp.publicKey);
+
+  console.log(`  ${BOLD}Local (same machine):${RESET}`);
+  console.log(`    pear run --dev .${DIM}  # auto-connects via ~/.oikos/${RESET}\n`);
+
+  console.log(`  ${BOLD}Remote:${RESET}`);
+  console.log(`    OIKOS_AGENT_PUBKEY=${kp.publicKey} pear run --dev .\n`);
+
+  console.log(`  ${DIM}The companion generates its own keypair on first run.${RESET}`);
+  console.log(`  ${DIM}Set COMPANION_OWNER_PUBKEY=<companion pubkey> on the agent.${RESET}\n`);
+}
+
+async function cmdWalletSub(): Promise<void> {
+  const sub = argv[1];
+
+  switch (sub) {
+    case 'backup': case 'export': {
+      console.log(`\n${BOLD}oikos wallet backup${RESET} — Export seed phrase\n`);
+      console.log(`${RED}${BOLD}⚠  WARNING: Your seed phrase controls ALL funds.${RESET}`);
+      console.log(`${RED}   Never share it. Never store it digitally. Write it on paper.${RESET}\n`);
+
+      const seedPaths = [
+        join(OIKOS_DIR, 'wallet-seed.enc.json'),
+        join(OIKOS_DIR, 'seed.json'),
+      ];
+
+      let seedData: string | null = null;
+      for (const p of seedPaths) {
+        if (existsSync(p)) {
+          seedData = readFileSync(p, 'utf-8');
+          break;
+        }
+      }
+
+      if (!seedData) {
+        console.log(`${YELLOW}No seed file found at ~/.oikos/${RESET}`);
+        console.log(`${DIM}In mock mode, the wallet uses a deterministic test seed.${RESET}`);
+        console.log(`${DIM}For testnet/mainnet, run: oikos init --real${RESET}\n`);
+        return;
+      }
+
+      try {
+        const data = JSON.parse(seedData) as { mnemonic?: string; entropy?: string; encrypted?: boolean };
+
+        if (data.encrypted) {
+          console.log(`${YELLOW}Seed is encrypted. Passphrase decryption not yet implemented.${RESET}`);
+          console.log(`${DIM}Planned for production release.${RESET}`);
+          return;
+        }
+
+        if (data.mnemonic) {
+          console.log(`${BOLD}Your 24-word seed phrase:${RESET}\n`);
+          const words = data.mnemonic.split(' ');
+          for (let i = 0; i < words.length; i++) {
+            const num = String(i + 1).padStart(2, ' ');
+            console.log(`  ${DIM}${num}.${RESET} ${words[i]}`);
+          }
+          console.log(`\n${RED}Store this offline. Clear your terminal.${RESET}\n`);
+        } else if (data.entropy) {
+          console.log(`${BOLD}Entropy (hex):${RESET} ${data.entropy}`);
+          console.log(`${DIM}Convert to mnemonic with any BIP39 tool.${RESET}\n`);
+        }
+      } catch {
+        console.error(`${RED}Failed to parse seed file.${RESET}`);
+      }
+      break;
+    }
+
+    default:
+      console.error(`${RED}Usage: oikos wallet <backup>${RESET}`);
+      process.exit(1);
+  }
+}
+
 // ── Commands ──
 
 async function cmdBalance(): Promise<void> {
@@ -442,41 +628,38 @@ async function cmdSimulate(): Promise<void> {
 }
 
 function showHelp(): void {
-  console.log(`${BOLD}oikos${RESET} — Oikos Wallet CLI
+  console.log(`${BOLD}oikos${RESET} — Sovereign AI Agent Wallet
 
-${BOLD}Read commands:${RESET}
-  oikos balance [symbol] [chain]        All balances (optional filter)
-  oikos address [chain]                 Wallet addresses
-  oikos status                          Policy budgets & cooldowns
-  oikos audit [--limit N]               Transaction history
-  oikos health                          Gateway health check
-  oikos swarm                           P2P swarm state
-  oikos identity                        ERC-8004 identity
-  oikos prices                          Asset prices
+${BOLD}Setup:${RESET}
+  oikos init                             Initialize wallet infrastructure
+  oikos pair                             Pair companion app
+  oikos wallet backup                    Export seed phrase for recovery
 
-${BOLD}Write commands:${RESET}
-  oikos pay <amount> <symbol> to <address>          Send tokens
-  oikos swap <amount> <symbol> to <toSymbol>        Swap tokens
-  oikos bridge <amount> <symbol> from <chain> to <chain>  Bridge cross-chain
-  oikos yield deposit|withdraw <amount> <symbol>    Yield operations
+${BOLD}Read:${RESET}
+  oikos balance [symbol] [chain]         All balances
+  oikos address [chain]                  Wallet addresses
+  oikos status                           Policy budgets & cooldowns
+  oikos audit [--limit N]                Transaction history
+  oikos health                           Service health
+  oikos swarm                            P2P swarm state
+  oikos identity                         ERC-8004 identity
+  oikos prices                           Asset prices
 
-${BOLD}Simulation:${RESET}
-  oikos simulate <type> <amount> <symbol>           Dry-run policy check (no execution)
-    types: payment, swap, bridge, yield
-    flags: --to <addr>, --toSymbol <SYM>, --chain <chain>
+${BOLD}Write:${RESET}
+  oikos pay <amt> <sym> to <addr>        Send tokens
+  oikos swap <amt> <sym> to <toSym>      Swap tokens
+  oikos bridge <amt> <sym> from <c> to <c>  Bridge cross-chain
+  oikos yield deposit|withdraw <amt> <sym>  Yield ops
 
-${BOLD}RGB commands:${RESET}
-  oikos rgb assets                                  List RGB assets
-  oikos rgb issue <ticker> <name> <supply>          Issue new RGB asset
-  oikos rgb transfer <invoice> <amount> [symbol]    Transfer via invoice
+${BOLD}Simulate:${RESET}
+  oikos simulate <type> <amt> <sym>      Dry-run policy check
+
+${BOLD}RGB:${RESET}
+  oikos rgb assets|issue|transfer        RGB asset operations
 
 ${BOLD}Flags:${RESET}
-  --port 3420         Gateway port (default: 3420)
-  --json              Raw JSON output
-  --reason "..."      Reason for write ops (default: "CLI operation")
-  --confidence 0.85   Confidence score (default: 0.85)
-  --protocol aave-v3  Yield protocol (default: aave-v3)
-  --limit 20          Audit entry limit (default: 20)
+  --port 3420     API port        --json          Raw JSON output
+  --reason "..."  Op reason       --confidence N  Score (0-1)
 `);
 }
 
@@ -484,6 +667,11 @@ ${BOLD}Flags:${RESET}
 
 async function main(): Promise<void> {
   try {
+    // Setup commands (no running server needed)
+    if (cmd === 'init') { await cmdInit(); return; }
+    if (cmd === 'pair') { await cmdPair(); return; }
+    if (cmd === 'wallet') { await cmdWalletSub(); return; }
+
     switch (cmd) {
       case 'balance': case 'bal': case 'b': await cmdBalance(); break;
       case 'address': case 'addr': case 'a': await cmdAddress(); break;
@@ -509,8 +697,8 @@ async function main(): Promise<void> {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg.includes('ECONNREFUSED') || msg.includes('fetch failed')) {
-      console.error(`${RED}Cannot connect to gateway at ${BASE}${RESET}`);
-      console.error(`Is the gateway running? Start with: ${BOLD}npm run demo${RESET} or ${BOLD}npm run start:gateway${RESET}`);
+      console.error(`${RED}Cannot connect to Oikos at ${BASE}${RESET}`);
+      console.error(`Is Oikos running? Start with: ${BOLD}npm start${RESET} or ${BOLD}oikos start${RESET}`);
     } else {
       console.error(`${RED}Error: ${msg}${RESET}`);
     }

@@ -5,6 +5,10 @@
  * Uses OikosServices for direct access to all infrastructure.
  * NEVER exposed to the internet. Binds to 127.0.0.1 only.
  *
+ * Auth: Optional Bearer token (SESSION_TOKEN env). If set,
+ * all /api/* endpoints require Authorization header (except /api/health and /api/token).
+ * Pattern from rgb-wallet-pear.
+ *
  * @security All proposals flow through the Wallet Isolate's PolicyEngine.
  */
 
@@ -24,12 +28,52 @@ export function createDashboard(
 ): void {
   const app = express();
   const { wallet } = services;
+  const sessionToken = process.env['SESSION_TOKEN'] ?? null;
 
-  // Serve static files
+  // Serve static files (fallback browser dashboard)
   const projectRoot = join(__dirname, '..', '..', '..');
   const publicDir = join(projectRoot, 'src', 'dashboard', 'public');
   app.use(express.static(publicDir));
   app.use(express.json());
+
+  // ── Bearer Token Auth (rgb-wallet-pear pattern) ──
+
+  /** Token endpoint — unauthenticated, returns session token */
+  app.get('/api/token', (_req, res) => {
+    if (!sessionToken) {
+      res.json({ token: null, auth: false });
+      return;
+    }
+    res.json({ token: sessionToken });
+  });
+
+  /** Auth middleware — skip for health, token, and static files */
+  app.use('/api', (req, res, next) => {
+    // Skip auth for health check and token endpoints
+    if (req.path === '/health' || req.path === '/token') {
+      next();
+      return;
+    }
+    // If no session token configured, skip auth entirely
+    if (!sessionToken) {
+      next();
+      return;
+    }
+    const auth = req.headers['authorization'];
+    if (!auth || auth !== 'Bearer ' + sessionToken) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+    next();
+  });
+
+  // ── Logo serving ──
+  app.get('/logo.png', (_req, res) => {
+    const logoPath = join(projectRoot, '..', 'assets', 'logo.png');
+    res.sendFile(logoPath, (err) => {
+      if (err) res.status(404).end();
+    });
+  });
 
   // -- MCP Endpoint --
   mountMCP(app, services);
@@ -37,8 +81,38 @@ export function createDashboard(
   // -- API Routes --
 
   /** Agent state — stub for agent-agnostic mode */
-  app.get('/api/state', (_req, res) => {
-    res.json({ status: 'connect_your_agent_via_mcp', hint: 'Use MCP tools at POST /mcp or REST API endpoints' });
+  app.get('/api/state', async (_req, res) => {
+    // Build a rich state response for the dashboard
+    try {
+      const balances = await wallet.queryBalanceAll().catch(() => []);
+      const auditEntries = await wallet.queryAudit(20).catch(() => []);
+      const entries = auditEntries as Record<string, unknown>[];
+
+      // Extract recent operations from audit log
+      const recentResults = entries
+        .filter((e) => e['type'] === 'proposal_result' || e['proposalType'])
+        .slice(0, 10);
+
+      // Swarm events
+      const swarmState = services.swarm?.getState();
+      const swarmEvents = (swarmState as Record<string, unknown> | undefined)?.['recentEvents'] ?? [];
+
+      res.json({
+        status: 'running',
+        balances,
+        recentResults,
+        swarmEvents,
+        eventsSeen: services.eventBus?.count ?? 0,
+        proposalsSent: entries.length,
+        proposalsApproved: entries.filter((e) => e['status'] === 'executed').length,
+        proposalsRejected: entries.filter((e) => e['status'] === 'rejected').length,
+        defiOps: entries.filter((e) => ['swap', 'bridge', 'yield'].includes(String(e['proposalType'] ?? ''))).length,
+        lastReasoning: 'Connect an agent via MCP to see reasoning.',
+        lastDecision: '--',
+      });
+    } catch {
+      res.json({ status: 'connect_your_agent_via_mcp', hint: 'Use MCP tools at POST /mcp or REST API endpoints' });
+    }
   });
 
   /** Wallet balances — all assets across all chains */
@@ -226,14 +300,93 @@ export function createDashboard(
     res.json({ events: services.eventBus.getRecent(limit) });
   });
 
-  // ── Companion Instructions (for connected agents to read) ──
+  // ── Companion Endpoints ──
 
+  /** Full companion state bundle — single call for everything the UI needs */
+  app.get('/api/companion/state', async (_req, res) => {
+    try {
+      const [balances, policies] = await Promise.all([
+        wallet.queryBalanceAll().catch(() => []),
+        wallet.queryPolicy().catch(() => []),
+      ]);
+      const swarmState = services.swarm?.getState() ?? null;
+      res.json({
+        balances,
+        policies,
+        swarm: swarmState,
+        events: services.eventBus?.getRecent(20) ?? [],
+        instructions: services.instructions.slice(-20),
+        companionConnected: services.companionConnected,
+        identity: services.identity,
+        walletConnected: wallet.isRunning(),
+      });
+    } catch {
+      res.status(500).json({ error: 'Failed to build companion state' });
+    }
+  });
+
+  /** Read queued instructions */
   app.get('/api/companion/instructions', (req, res) => {
     const limit = parseInt(String(req.query['limit'] ?? '50'), 10);
     res.json({ instructions: services.instructions.slice(-limit) });
   });
 
-  /** Health check */
+  /** Submit instruction (companion -> agent path) */
+  app.post('/api/companion/instruct', (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const text = String(body['text'] ?? '').trim();
+    if (!text) {
+      res.status(400).json({ error: 'text required' });
+      return;
+    }
+    services.instructions.push({ text, timestamp: Date.now() });
+    // Keep last 50
+    if (services.instructions.length > 50) {
+      services.instructions.splice(0, services.instructions.length - 50);
+    }
+    console.error(`[companion] Instruction received: "${text.slice(0, 80)}"`);
+    res.json({ ok: true, queued: services.instructions.length });
+  });
+
+  /** Propose a payment from the companion UI */
+  app.post('/api/companion/propose', async (req, res) => {
+    try {
+      const body = req.body as Record<string, unknown>;
+      const type = String(body['type'] ?? 'payment');
+
+      if (type === 'payment') {
+        const result = await wallet.proposePayment({
+          to: String(body['to'] ?? ''),
+          amount: String(body['amount'] ?? '0'),
+          symbol: String(body['symbol'] ?? 'USDT') as TokenSymbol,
+          chain: String(body['chain'] ?? 'ethereum') as Chain,
+          reason: String(body['reason'] ?? 'companion'),
+          confidence: 0.9,
+          strategy: 'companion',
+          timestamp: Date.now(),
+        });
+        res.json(result);
+      } else if (type === 'swap') {
+        const result = await wallet.proposeSwap({
+          symbol: String(body['symbol'] ?? 'USDT') as TokenSymbol,
+          toSymbol: String(body['toSymbol'] ?? 'XAUT') as TokenSymbol,
+          amount: String(body['amount'] ?? '0'),
+          chain: String(body['chain'] ?? 'ethereum') as Chain,
+          reason: String(body['reason'] ?? 'companion swap'),
+          confidence: 0.9,
+          strategy: 'companion',
+          timestamp: Date.now(),
+        });
+        res.json(result);
+      } else {
+        res.status(400).json({ error: `Unsupported proposal type: ${type}` });
+      }
+    } catch {
+      res.status(500).json({ error: 'Failed to submit proposal' });
+    }
+  });
+
+  /** Health check — unauthenticated */
   app.get('/api/health', (_req, res) => {
     res.json({
       status: 'ok',

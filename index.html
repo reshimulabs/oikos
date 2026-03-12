@@ -1,14 +1,853 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Oikos Agent</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Oikos Companion</title>
   <style>
-    body { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; }
-    iframe { width: 100%; height: 100%; border: none; }
+    :root {
+      --bg: #06060b;
+      --bg2: #0c0c14;
+      --card: #111119;
+      --card-hover: #16161f;
+      --border: #1c1c2e;
+      --border-light: #252540;
+      --text: #e4e4ee;
+      --muted: #6b6b88;
+      --dim: #44445a;
+      --green: #22c55e;
+      --green-dim: #166534;
+      --red: #ef4444;
+      --red-dim: #7f1d1d;
+      --yellow: #eab308;
+      --blue: #3b82f6;
+      --purple: #a855f7;
+      --purple-dim: rgba(168,85,247,0.15);
+      --orange: #f97316;
+      --gold: #d4a843;
+      --cyan: #06b6d4;
+      --gradient-purple: linear-gradient(135deg, #a855f7 0%, #6366f1 100%);
+      --gradient-green: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      --sidebar-w: 200px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      overflow: hidden;
+      line-height: 1.5;
+    }
+    code, .mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
+
+    /* ── Titlebar (macOS hiddenInset) ── */
+    .titlebar {
+      -webkit-app-region: drag;
+      height: 38px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 1rem 0 80px; /* 80px left for macOS traffic lights */
+      flex-shrink: 0;
+      z-index: 100;
+    }
+    .titlebar-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+    .titlebar-right {
+      -webkit-app-region: no-drag;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .status-dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .status-dot.off { background: var(--red); }
+    .status-dot.warn { background: var(--yellow); }
+    .status-label { font-size: 0.68rem; color: var(--muted); display: flex; align-items: center; gap: 0.3rem; }
+    .refresh-ts { font-size: 0.62rem; color: var(--dim); }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      height: calc(100vh - 38px);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: var(--sidebar-w);
+      background: var(--bg2);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .sidebar-logo {
+      padding: 1.25rem 1rem 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+    .sidebar-logo img {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+    }
+    .sidebar-logo-text {
+      font-size: 1.1rem;
+      font-weight: 700;
+      background: var(--gradient-purple);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -0.02em;
+    }
+    .sidebar-logo-sub {
+      font-size: 0.62rem;
+      color: var(--dim);
+      font-weight: 400;
+      display: block;
+      -webkit-text-fill-color: var(--dim);
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 0.5rem 0;
+      overflow-y: auto;
+    }
+    .nav-section-label {
+      font-size: 0.6rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 700;
+      padding: 0.75rem 1rem 0.35rem;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      border-left: 3px solid transparent;
+      user-select: none;
+    }
+    .nav-item:hover {
+      background: rgba(168,85,247,0.06);
+      color: var(--text);
+    }
+    .nav-item.active {
+      background: rgba(168,85,247,0.1);
+      color: var(--purple);
+      border-left-color: var(--purple);
+      font-weight: 600;
+    }
+    .nav-icon {
+      width: 16px;
+      text-align: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .sidebar-status {
+      border-top: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+    }
+    .sidebar-status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--muted);
+      padding: 0.2rem 0;
+    }
+    .sidebar-status-row .status-dot { width: 6px; height: 6px; }
+
+    /* ── Content ── */
+    .content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.25rem 1.5rem;
+    }
+
+    /* ── View panels ── */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* ── Shared card styles ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.15rem;
+      transition: border-color 0.2s;
+    }
+    .card:hover { border-color: var(--border-light); }
+    .card-title {
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+      margin-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-title .badge {
+      font-size: 0.62rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    /* ── KPI strip ── */
+    .kpi-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+    .kpi {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      transition: border-color 0.2s;
+    }
+    .kpi:hover { border-color: var(--border-light); }
+    .kpi-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+    .kpi-value { font-size: 1.5rem; font-weight: 700; margin-top: 0.2rem; }
+    .kpi-sub { font-size: 0.7rem; color: var(--dim); margin-top: 0.15rem; }
+    .kpi-value.green { color: var(--green); }
+    .kpi-value.red { color: var(--red); }
+    .kpi-value.blue { color: var(--blue); }
+    .kpi-value.purple { color: var(--purple); }
+    .kpi-value.gold { color: var(--gold); }
+
+    /* ── Grid ── */
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; }
+    .col-4 { grid-column: span 4; }
+    .col-5 { grid-column: span 5; }
+    .col-6 { grid-column: span 6; }
+    .col-7 { grid-column: span 7; }
+    .col-8 { grid-column: span 8; }
+    .col-12 { grid-column: span 12; }
+
+    /* ── Portfolio ── */
+    .portfolio-total { font-size: 2rem; font-weight: 700; margin-bottom: 0.75rem; }
+    .portfolio-total .currency { font-size: 1rem; color: var(--muted); font-weight: 400; }
+    .alloc-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--border); margin-bottom: 0.75rem; }
+    .alloc-seg { height: 100%; transition: width 0.6s ease; min-width: 2px; }
+    .asset-row { display: flex; justify-content: space-between; align-items: center; padding: 0.45rem 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
+    .asset-row:last-child { border-bottom: none; }
+    .asset-left { display: flex; align-items: center; gap: 0.5rem; }
+    .asset-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex-shrink: 0; }
+    .asset-symbol { font-weight: 600; }
+    .asset-chain { font-size: 0.68rem; color: var(--dim); }
+    .asset-right { text-align: right; }
+    .asset-amount { font-weight: 600; font-family: 'SF Mono', monospace; }
+    .asset-usd { font-size: 0.7rem; color: var(--muted); }
+    .asset-pct { font-size: 0.68rem; color: var(--dim); margin-left: 0.3rem; }
+
+    /* Asset colors */
+    .c-usdt { background: var(--green); }
+    .c-xaut { background: var(--gold); }
+    .c-usat { background: var(--blue); }
+    .c-btc { background: var(--orange); }
+    .c-eth { background: var(--cyan); }
+
+    /* ── Reasoning ── */
+    .reasoning-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.7rem;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      max-height: 180px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      color: var(--muted);
+    }
+    .decision-label { font-size: 0.75rem; color: var(--text); margin-bottom: 0.4rem; }
+    .decision-label strong { color: var(--purple); }
+
+    /* ── Operations list ── */
+    .op-list { list-style: none; max-height: 380px; overflow-y: auto; }
+    .op-item { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.78rem; display: flex; align-items: flex-start; gap: 0.5rem; }
+    .op-item:last-child { border-bottom: none; }
+    .op-indicator { width: 3px; min-height: 100%; border-radius: 2px; flex-shrink: 0; align-self: stretch; }
+    .op-ind-executed { background: var(--green); }
+    .op-ind-rejected { background: var(--red); }
+    .op-ind-failed { background: var(--yellow); }
+    .op-body { flex: 1; }
+    .op-badge { display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
+    .badge-payment { background: rgba(34,197,94,0.12); color: var(--green); }
+    .badge-swap { background: var(--purple-dim); color: var(--purple); }
+    .badge-bridge { background: rgba(59,130,246,0.12); color: var(--blue); }
+    .badge-yield { background: rgba(249,115,22,0.12); color: var(--orange); }
+    .badge-feedback { background: rgba(6,182,212,0.12); color: var(--cyan); }
+    .op-status { font-weight: 600; margin-left: 0.3rem; }
+    .op-detail { color: var(--muted); font-size: 0.72rem; margin-top: 0.15rem; }
+    .op-hash { font-family: 'SF Mono', monospace; color: var(--dim); font-size: 0.65rem; }
+
+    /* ── Policy ── */
+    .policy-item { margin-bottom: 0.65rem; }
+    .policy-name { font-size: 0.78rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .policy-rule { font-size: 0.72rem; color: var(--muted); padding: 0.15rem 0; }
+    .budget-bar-bg { height: 4px; background: var(--border); border-radius: 2px; margin-top: 0.25rem; }
+    .budget-bar-fill { height: 100%; border-radius: 2px; transition: width 0.5s; }
+
+    /* ── Swarm ── */
+    .peer-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.25rem 0.55rem; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 0.72rem; margin: 0.2rem; }
+    .peer-chip .peer-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .peer-rep { color: var(--green); font-weight: 600; font-size: 0.68rem; }
+    .ann-item { padding: 0.55rem; border-bottom: 1px solid var(--border); font-size: 0.78rem; }
+    .ann-item:last-child { border-bottom: none; }
+    .ann-cat { display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; }
+    .cat-service { background: rgba(59,130,246,0.12); color: var(--blue); }
+    .cat-auction { background: rgba(249,115,22,0.12); color: var(--orange); }
+    .cat-request { background: rgba(34,197,94,0.12); color: var(--green); }
+    .room-item { padding: 0.55rem; border-bottom: 1px solid var(--border); font-size: 0.78rem; }
+    .room-item:last-child { border-bottom: none; }
+    .room-badge { display: inline-block; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.62rem; font-weight: 700; text-transform: uppercase; }
+    .rb-open { background: rgba(59,130,246,0.12); color: var(--blue); }
+    .rb-negotiating { background: var(--purple-dim); color: var(--purple); }
+    .rb-accepted { background: rgba(34,197,94,0.12); color: var(--green); }
+    .rb-executing { background: rgba(249,115,22,0.12); color: var(--orange); }
+    .rb-settled { background: rgba(34,197,94,0.2); color: #4ade80; }
+    .econ-row { display: flex; justify-content: space-between; padding: 0.4rem 0; font-size: 0.82rem; border-bottom: 1px solid var(--border); }
+    .econ-row:last-child { border-bottom: none; }
+    .econ-label { color: var(--muted); }
+    .econ-val { font-weight: 700; font-family: 'SF Mono', monospace; }
+    .econ-pos { color: var(--green); }
+    .econ-neg { color: var(--red); }
+
+    /* ── Identity ── */
+    .id-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+    .id-item .id-label { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .id-item .id-value { font-size: 1rem; font-weight: 700; margin-top: 0.1rem; }
+    .id-yes { color: var(--green); }
+    .id-no { color: var(--red); }
+    .id-link { color: var(--cyan); text-decoration: none; }
+    .id-link:hover { text-decoration: underline; }
+
+    /* ── Section divider ── */
+    .section { margin-top: 1.25rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.75rem; }
+    .section-title { font-size: 0.82rem; font-weight: 700; color: var(--purple); text-transform: uppercase; letter-spacing: 0.08em; white-space: nowrap; }
+    .section-line { flex: 1; height: 1px; background: var(--border); }
+
+    /* ── Chat view ── */
+    .chat-container { display: flex; flex-direction: column; height: calc(100vh - 38px - 2.5rem); }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 1rem;
+    }
+    .chat-msg {
+      padding: 0.6rem 0.8rem;
+      margin-bottom: 0.5rem;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      max-width: 85%;
+    }
+    .chat-msg.user {
+      background: var(--purple-dim);
+      border: 1px solid rgba(168,85,247,0.25);
+      margin-left: auto;
+    }
+    .chat-msg.system {
+      background: var(--card);
+      border: 1px solid var(--border);
+    }
+    .chat-msg .chat-time {
+      font-size: 0.62rem;
+      color: var(--dim);
+      margin-top: 0.25rem;
+    }
+    .chat-input-area {
+      display: flex;
+      gap: 0.5rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .chat-input {
+      flex: 1;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      color: var(--text);
+      font-size: 0.82rem;
+      font-family: inherit;
+      outline: none;
+      resize: none;
+    }
+    .chat-input:focus { border-color: var(--purple); }
+    .chat-input::placeholder { color: var(--dim); }
+    .chat-send {
+      background: var(--gradient-purple);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 0.6rem 1.2rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      white-space: nowrap;
+    }
+    .chat-send:hover { opacity: 0.85; }
+    .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ── Wallet view forms ── */
+    .form-group { margin-bottom: 0.75rem; }
+    .form-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; margin-bottom: 0.3rem; display: block; }
+    .form-input, .form-select {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.7rem;
+      color: var(--text);
+      font-size: 0.82rem;
+      font-family: inherit;
+      outline: none;
+    }
+    .form-input:focus, .form-select:focus { border-color: var(--purple); }
+    .form-input::placeholder { color: var(--dim); }
+    .form-select { appearance: none; cursor: pointer; }
+    .form-select option { background: var(--card); color: var(--text); }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--border-light); background: var(--card-hover); }
+    .btn-primary { background: var(--gradient-purple); border-color: transparent; color: white; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-danger { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); color: var(--red); }
+    .sim-result {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.78rem;
+      font-family: 'SF Mono', monospace;
+      white-space: pre-wrap;
+      color: var(--muted);
+      margin-top: 0.5rem;
+    }
+
+    /* ── Audit view ── */
+    .audit-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .audit-table th {
+      text-align: left;
+      font-size: 0.68rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 600;
+      padding: 0.5rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--card);
+    }
+    .audit-table td {
+      padding: 0.45rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .audit-table tr:hover td { background: rgba(168,85,247,0.04); }
+
+    /* ── Event lines ── */
+    .event-line { font-size: 0.7rem; color: var(--dim); padding: 0.2rem 0; border-bottom: 1px solid var(--border); }
+    .event-line:last-child { border-bottom: none; }
+    .event-time { color: var(--muted); font-family: 'SF Mono', monospace; }
+
+    /* ── Empty state ── */
+    .empty { color: var(--dim); font-size: 0.78rem; padding: 1rem 0; text-align: center; }
+
+    /* ── Architecture footer ── */
+    .arch-strip {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 1rem;
+      margin-top: 1.25rem;
+      display: flex;
+      justify-content: center;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .arch-item { font-size: 0.68rem; color: var(--dim); }
+    .arch-item strong { color: var(--muted); }
+
+    .hidden { display: none !important; }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .sidebar { width: 56px; }
+      .sidebar-logo-text, .sidebar-logo-sub, .nav-item span:not(.nav-icon), .nav-section-label, .sidebar-status-row span:first-child { display: none; }
+      .nav-item { justify-content: center; padding: 0.6rem; }
+      .nav-item .nav-icon { margin: 0; }
+      .col-4, .col-5, .col-6, .col-7, .col-8, .col-12 { grid-column: span 12; }
+      .content { padding: 0.75rem 1rem; }
+    }
   </style>
 </head>
 <body>
-  <iframe src="http://127.0.0.1:3420/" id="dashboard"></iframe>
+
+<!-- Titlebar -->
+<div class="titlebar">
+  <span class="titlebar-title">Oikos Companion</span>
+  <div class="titlebar-right">
+    <span class="status-label"><span class="status-dot off" id="td-wallet"></span> Wallet</span>
+    <span class="status-label"><span class="status-dot off" id="td-swarm"></span> Swarm</span>
+    <span class="status-label"><span class="status-dot off" id="td-companion"></span> Companion</span>
+    <span class="refresh-ts" id="refresh-ts"></span>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="http://127.0.0.1:13421/logo.png" alt="Oikos" onerror="this.style.display='none'">
+      <div>
+        <span class="sidebar-logo-text">Oikos</span>
+        <span class="sidebar-logo-sub">Companion v0.2</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Monitor</div>
+      <div class="nav-item active" data-view="overview">
+        <span class="nav-icon">&#9673;</span> <span>Overview</span>
+      </div>
+      <div class="nav-item" data-view="wallet">
+        <span class="nav-icon">&#9878;</span> <span>Wallet</span>
+      </div>
+      <div class="nav-item" data-view="swarm">
+        <span class="nav-icon">&#9788;</span> <span>Swarm</span>
+      </div>
+      <div class="nav-item" data-view="policies">
+        <span class="nav-icon">&#9881;</span> <span>Policies</span>
+      </div>
+      <div class="nav-item" data-view="audit">
+        <span class="nav-icon">&#9776;</span> <span>Audit</span>
+      </div>
+      <div class="nav-section-label">Companion</div>
+      <div class="nav-item" data-view="chat">
+        <span class="nav-icon">&#9993;</span> <span>Chat</span>
+      </div>
+    </nav>
+
+    <div class="sidebar-status">
+      <div class="sidebar-status-row">
+        <span>Wallet</span>
+        <span class="status-dot off" id="sb-wallet"></span>
+      </div>
+      <div class="sidebar-status-row">
+        <span>Swarm</span>
+        <span class="status-dot off" id="sb-swarm"></span>
+      </div>
+      <div class="sidebar-status-row">
+        <span>Events</span>
+        <span class="status-dot off" id="sb-events"></span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Content Area -->
+  <main class="content" id="content">
+
+    <!-- ═══════ OVERVIEW ═══════ -->
+    <div class="view active" id="view-overview">
+      <div class="kpi-strip">
+        <div class="kpi">
+          <div class="kpi-label">Portfolio Value</div>
+          <div class="kpi-value green" id="kpi-portfolio">--</div>
+          <div class="kpi-sub" id="kpi-assets">-- assets</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Events</div>
+          <div class="kpi-value blue" id="kpi-events">0</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Proposals</div>
+          <div class="kpi-value" id="kpi-proposals">0</div>
+          <div class="kpi-sub" id="kpi-proposal-detail">0 approved / 0 rejected</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">DeFi Ops</div>
+          <div class="kpi-value purple" id="kpi-defi">0</div>
+          <div class="kpi-sub">swaps + bridges + yield</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card col-5">
+          <div class="card-title">Portfolio Allocation</div>
+          <div class="portfolio-total" id="portfolio-total">$0.00 <span class="currency">USD</span></div>
+          <div class="alloc-bar" id="alloc-bar"></div>
+          <div id="asset-list"></div>
+        </div>
+        <div class="card col-7">
+          <div class="card-title">Agent Reasoning <span class="badge" id="decision-badge" style="background:var(--purple-dim);color:var(--purple);">IDLE</span></div>
+          <div class="decision-label" id="decision-line">Last decision: <strong>--</strong></div>
+          <div class="reasoning-box" id="reasoning">Connect an agent via MCP to see reasoning.</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card col-7">
+          <div class="card-title">Recent Operations</div>
+          <ul class="op-list" id="op-list">
+            <li class="op-item"><div class="op-body empty">No operations yet</div></li>
+          </ul>
+        </div>
+        <div class="card col-5">
+          <div class="card-title">Identity (ERC-8004)</div>
+          <div class="id-grid">
+            <div class="id-item"><div class="id-label">Registered</div><div class="id-value" id="id-registered">--</div></div>
+            <div class="id-item"><div class="id-label">Agent ID</div><div class="id-value" id="id-agent-id">--</div></div>
+            <div class="id-item"><div class="id-label">Wallet Set</div><div class="id-value" id="id-wallet-set">--</div></div>
+            <div class="id-item"><div class="id-label">Reputation</div><div class="id-value green" id="id-rep">--</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ WALLET ═══════ -->
+    <div class="view" id="view-wallet">
+      <div class="grid">
+        <div class="card col-7">
+          <div class="card-title">Balances</div>
+          <div class="portfolio-total" id="w-portfolio-total">$0.00 <span class="currency">USD</span></div>
+          <div class="alloc-bar" id="w-alloc-bar"></div>
+          <div id="w-asset-list"></div>
+        </div>
+        <div class="card col-5">
+          <div class="card-title">Addresses</div>
+          <div id="w-addresses"><div class="empty">Loading...</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <span class="section-title">Propose Payment</span>
+        <span class="section-line"></span>
+      </div>
+      <div class="grid">
+        <div class="card col-6">
+          <div class="form-group">
+            <label class="form-label">Recipient Address</label>
+            <input class="form-input" id="pay-to" placeholder="0x..." />
+          </div>
+          <div style="display:flex;gap:0.5rem;">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">Amount</label>
+              <input class="form-input" id="pay-amount" type="number" step="0.01" placeholder="0.00" />
+            </div>
+            <div class="form-group" style="width:100px;">
+              <label class="form-label">Token</label>
+              <select class="form-select" id="pay-symbol">
+                <option value="USDT">USDt</option>
+                <option value="XAUT">XAUt</option>
+                <option value="USAT">USAt</option>
+                <option value="ETH">ETH</option>
+              </select>
+            </div>
+            <div class="form-group" style="width:120px;">
+              <label class="form-label">Chain</label>
+              <select class="form-select" id="pay-chain">
+                <option value="ethereum">Ethereum</option>
+                <option value="sepolia">Sepolia</option>
+                <option value="arbitrum">Arbitrum</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Reason</label>
+            <input class="form-input" id="pay-reason" placeholder="Why are you sending?" />
+          </div>
+          <button class="btn btn-primary" id="pay-btn">Send Payment</button>
+          <div class="sim-result hidden" id="pay-result"></div>
+        </div>
+
+        <div class="card col-6">
+          <div class="card-title">Simulate (Dry-Run)</div>
+          <div class="form-group">
+            <label class="form-label">Amount</label>
+            <input class="form-input" id="sim-amount" type="number" step="0.01" placeholder="0.00" />
+          </div>
+          <div style="display:flex;gap:0.5rem;">
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">Token</label>
+              <select class="form-select" id="sim-symbol">
+                <option value="USDT">USDt</option>
+                <option value="XAUT">XAUt</option>
+                <option value="USAT">USAt</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex:1;">
+              <label class="form-label">Chain</label>
+              <select class="form-select" id="sim-chain">
+                <option value="ethereum">Ethereum</option>
+                <option value="sepolia">Sepolia</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn" id="sim-btn">Simulate</button>
+          <div class="sim-result hidden" id="sim-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ SWARM ═══════ -->
+    <div class="view" id="view-swarm">
+      <div id="swarm-disabled" class="empty" style="padding:3rem;">Swarm is not enabled. Start with SWARM_ENABLED=true.</div>
+      <div id="swarm-content" class="hidden">
+        <div class="kpi-strip">
+          <div class="kpi">
+            <div class="kpi-label">Agent Name</div>
+            <div class="kpi-value purple" id="sw-name">--</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Reputation</div>
+            <div class="kpi-value green" id="sw-rep">--</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Peers</div>
+            <div class="kpi-value blue" id="sw-peer-count">0</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Sustainability</div>
+            <div class="kpi-value" id="sw-sustainability">--</div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card col-4">
+            <div class="card-title">Connected Peers</div>
+            <div id="sw-peers"><div class="empty">No peers</div></div>
+          </div>
+          <div class="card col-4">
+            <div class="card-title">Announcement Board</div>
+            <div id="sw-anns" style="max-height:300px;overflow-y:auto;"><div class="empty">No announcements</div></div>
+          </div>
+          <div class="card col-4">
+            <div class="card-title">Active Negotiations</div>
+            <div id="sw-rooms" style="max-height:300px;overflow-y:auto;"><div class="empty">No active rooms</div></div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card col-5">
+            <div class="card-title">Self-Sustaining Economics</div>
+            <div id="sw-econ">
+              <div class="econ-row"><span class="econ-label">Revenue</span><span class="econ-val econ-pos" id="sw-econ-rev">$0.00</span></div>
+              <div class="econ-row"><span class="econ-label">Costs</span><span class="econ-val econ-neg" id="sw-econ-cost">$0.00</span></div>
+              <div class="econ-row"><span class="econ-label">Net Profit</span><span class="econ-val" id="sw-econ-profit">$0.00</span></div>
+              <div class="econ-row"><span class="econ-label">Deals</span><span class="econ-val" id="sw-econ-deals">0</span></div>
+            </div>
+          </div>
+          <div class="card col-7">
+            <div class="card-title">Swarm Events</div>
+            <div id="sw-events" style="max-height:250px;overflow-y:auto;"><div class="empty">No events</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ POLICIES ═══════ -->
+    <div class="view" id="view-policies">
+      <div class="card">
+        <div class="card-title">Policy Engine <span class="badge" style="background:var(--green-dim);color:var(--green);">ACTIVE</span></div>
+        <div id="pol-content"><div class="empty">Loading policies...</div></div>
+      </div>
+    </div>
+
+    <!-- ═══════ AUDIT ═══════ -->
+    <div class="view" id="view-audit">
+      <div class="card" style="padding:0;">
+        <div class="card-title" style="padding:1rem 1.15rem 0.5rem;">
+          Audit Log
+          <span style="font-size:0.68rem;color:var(--dim);font-weight:400;" id="audit-count">0 entries</span>
+        </div>
+        <div style="max-height:calc(100vh - 160px);overflow-y:auto;">
+          <table class="audit-table" id="audit-table">
+            <thead>
+              <tr><th>Time</th><th>Type</th><th>Status</th><th>Amount</th><th>Details</th></tr>
+            </thead>
+            <tbody id="audit-body">
+              <tr><td colspan="5" class="empty">Loading audit log...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════ CHAT (Companion) ═══════ -->
+    <div class="view" id="view-chat">
+      <div class="chat-container">
+        <div class="card" style="margin-bottom:0.75rem;padding:0.75rem 1rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="font-size:0.82rem;font-weight:600;">Companion Channel</div>
+              <div style="font-size:0.68rem;color:var(--dim);">Send instructions to your agent. All proposals flow through the PolicyEngine.</div>
+            </div>
+            <span class="status-label"><span class="status-dot off" id="chat-companion-dot"></span> <span id="chat-companion-label">Disconnected</span></span>
+          </div>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-msg system">
+            <div>Welcome to Oikos Companion. Type an instruction below to guide your agent.</div>
+            <div class="chat-time">System</div>
+          </div>
+        </div>
+        <div class="chat-input-area">
+          <input class="chat-input" id="chat-input" placeholder="Type an instruction for your agent..." />
+          <button class="chat-send" id="chat-send">Send</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>

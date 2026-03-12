@@ -8,9 +8,10 @@
   "main": "index.js",
   "pear": {
     "pre": "pear-electron/pre",
-    "name": "oikos-agent",
+    "name": "oikos-companion",
     "gui": {
       "main": "index.html",
+      "icon": "assets/logo.png",
       "width": 1280,
       "height": 800,
       "minWidth": 800,
@@ -18,7 +19,7 @@
       "titleBarStyle": "hiddenInset"
     },
     "links": {
-      "dashboard": "http://127.0.0.1:3420"
+      "internal": "http://127.0.0.1:13421"
     }
   },
   "workspaces": [
@@ -36,5 +37,20 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "b4a": "1.8.0",
+    "bare-env": "^3.0.0",
+    "bare-fs": "^3.0.0",
+    "bare-http1": "^4.2.3",
+    "bare-os": "^3.7.1",
+    "bare-path": "^3.0.0",
+    "compact-encoding": "2.19.0",
+    "hypercore-crypto": "^3.4.2",
+    "hyperswarm": "4.16.0",
+    "pear-bridge": "^1.2.5",
+    "pear-electron": "^1.7.28",
+    "protomux": "3.10.0",
+    "sodium-universal": "5.0.1"
   }
 }
