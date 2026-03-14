@@ -122,8 +122,9 @@ async function main(): Promise<void> {
         agentName: config.agentName,
         capabilities,
         keypairPath: config.keypairPath,
-        roomTimeoutMs: 60000,
-        heartbeatIntervalMs: 15000,
+        roomTimeoutMs: 120000,            // 2 min — room negotiation timeout
+        heartbeatIntervalMs: 15000,       // 15s — heartbeat + announcement re-broadcast
+        announcementTtlMs: 3600000,       // 1 hour — auto-renewed on each heartbeat
         relayPubkey: config.swarmRelayPubkey || undefined,
         bootstrapPeers: bootstrapPeers.length > 0 ? bootstrapPeers : undefined,
       });

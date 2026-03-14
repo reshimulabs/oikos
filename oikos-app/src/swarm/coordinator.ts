@@ -40,6 +40,8 @@ export interface SwarmConfig {
   keypairPath: string;
   roomTimeoutMs: number;
   heartbeatIntervalMs: number;
+  /** How long announcements stay active (default: 1 hour). Auto-renewed on heartbeat. */
+  announcementTtlMs: number;
   /** Injected HyperDHT for testnet */
   dht?: unknown;
   /** Relay peer pubkey (hex) for holepunch fallback */
@@ -181,7 +183,7 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
       description: opts.description,
       priceRange: opts.priceRange,
       capabilities: this.identity.capabilities,
-      expiresAt: Date.now() + this.config.roomTimeoutMs,
+      expiresAt: Date.now() + this.config.announcementTtlMs,
       timestamp: Date.now(),
     };
 
@@ -191,7 +193,7 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
     // Track locally
     this.announcements.push(announcement);
 
-    // Create room for this announcement
+    // Create room for this announcement (rooms have shorter timeout than announcements)
     this.marketplace.createRoom(announcement, this.config.roomTimeoutMs);
 
     console.error(`[swarm] Posted announcement: ${announcement.title} (${announcement.id.slice(0, 8)})`);
@@ -387,10 +389,14 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
       timestamp: Date.now(),
     });
 
-    // Re-broadcast own active (non-expired) announcements so late-joining peers see them
+    // Re-broadcast own announcements and auto-renew their TTL.
+    // As long as the agent is online and heartbeating, its announcements stay alive.
+    // When the agent goes offline, announcements naturally expire after the TTL.
     const now = Date.now();
     for (const ann of this.announcements) {
-      if (ann.agentPubkey === this.identity.pubkey && ann.expiresAt > now) {
+      if (ann.agentPubkey === this.identity.pubkey) {
+        // Renew TTL — announcement lives as long as agent is online
+        ann.expiresAt = now + this.config.announcementTtlMs;
         this.channels.broadcastBoard(ann);
       }
     }

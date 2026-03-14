@@ -37,6 +37,7 @@ export interface MockSwarmConfig {
   agentName: string;
   capabilities: AgentCapability[];
   roomTimeoutMs: number;
+  announcementTtlMs?: number;
 }
 
 export class MockSwarmCoordinator implements SwarmCoordinatorInterface {
@@ -139,7 +140,7 @@ export class MockSwarmCoordinator implements SwarmCoordinatorInterface {
       description: opts.description,
       priceRange: opts.priceRange,
       capabilities: this.identity.capabilities,
-      expiresAt: Date.now() + this.config.roomTimeoutMs,
+      expiresAt: Date.now() + (this.config.announcementTtlMs ?? 3600000),
       timestamp: Date.now(),
     };
 
@@ -363,7 +364,7 @@ export class MockSwarmCoordinator implements SwarmCoordinatorInterface {
       description: opts.description,
       priceRange: opts.priceRange,
       capabilities: peer.identity.capabilities,
-      expiresAt: Date.now() + this.config.roomTimeoutMs,
+      expiresAt: Date.now() + (this.config.announcementTtlMs ?? 3600000),
       timestamp: Date.now(),
     };
 
