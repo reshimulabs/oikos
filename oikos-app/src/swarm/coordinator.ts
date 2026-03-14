@@ -374,7 +374,8 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
     }
   }
 
-  /** Send heartbeat to all board peers */
+  /** Send heartbeat + re-broadcast active announcements to all board peers.
+   *  Re-broadcasting ensures late joiners (like the gateway) see our listings. */
   private _sendHeartbeat(): void {
     if (!this.identity || !this.channels) return;
     this.channels.broadcastBoard({
@@ -385,6 +386,14 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
       capabilities: this.identity.capabilities,
       timestamp: Date.now(),
     });
+
+    // Re-broadcast own active (non-expired) announcements so late-joining peers see them
+    const now = Date.now();
+    for (const ann of this.announcements) {
+      if (ann.agentPubkey === this.identity.pubkey && ann.expiresAt > now) {
+        this.channels.broadcastBoard(ann);
+      }
+    }
   }
 
   /** Handle incoming board message */
