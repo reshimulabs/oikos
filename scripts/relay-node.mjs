@@ -70,6 +70,10 @@ const node = new DHT({
 
 await node.ready()
 
+// CRITICAL: listen() makes this node addressable by pubkey on the DHT.
+// Without it, ready() only initializes the DHT client — peers can't find us.
+await node.listen()
+
 const pubkey = keyPair.publicKey.toString('hex')
 const addr = node.address()
 

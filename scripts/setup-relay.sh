@@ -61,12 +61,19 @@ NoNewPrivileges=true
 WantedBy=multi-user.target
 EOF
 
-# 6. Start it
+# 6. Open firewall for DHT (UDP) if UFW is active
+if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
+  # HyperDHT uses a random high port; allow the range
+  ufw allow 49152:65535/udp >/dev/null 2>&1
+  echo "[setup] UFW: opened UDP 49152-65535 for DHT."
+fi
+
+# 7. Start it
 systemctl daemon-reload
 systemctl enable --now ${SERVICE_NAME}
 
-# 7. Wait for startup and grab pubkey
-sleep 2
+# 8. Wait for startup and grab pubkey
+sleep 3
 PUBKEY=$(journalctl -u ${SERVICE_NAME} --no-pager -n 20 | grep "Pubkey:" | tail -1 | awk '{print $NF}')
 
 echo ""
