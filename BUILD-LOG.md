@@ -2385,3 +2385,83 @@ Full architecture documented in ROADMAP.md Phase 7.
 The hardest problem in P2P agent commerce isn't the networking (Hyperswarm solved that) or the wallet (WDK solved that) — it's **settlement**. Who goes first? How do you prevent the counterparty from walking away? The answer depends on what's being traded: same-chain tokens use DEX atomics, cross-chain uses HTLCs, services use collateral deposits. All three flow through the same PolicyEngine. Oikos becomes a **settlement protocol**, not just a wallet protocol.
 
 ---
+
+## 2026-03-16 — Topology Rename + Gateway Board UI Overhaul
+
+### Session: Demo Polish (Rename + UI)
+
+**Duration**: ~2 hours
+**Participants**: Adriano (human), Claude Opus 4.6 (AI)
+**Result**: ✅ Clean rename, full gateway UI overhaul, tags system end-to-end
+
+#### Point 1: Topology Rename
+
+Naming was backwards: `oikos-app/` was the agent infrastructure (Node.js, wallet IPC, swarm, MCP), but "app" suggests human-facing. The Pear Runtime human app was called "companion."
+
+**Rename:**
+| Before | After | What it is |
+|--------|-------|------------|
+| `oikos-app/` | `oikos-wallet/` | Agent wallet infrastructure (Node.js) |
+| `oikos-companion` (pear name) | `oikos-app` | Pear Runtime human app |
+| "companion" (terminology) | "Oikos App" | Product name for human layer |
+
+59 files touched: `git mv oikos-app oikos-wallet`, then bulk updates across all package.json, scripts, docs, examples, source code, Pear app UI strings. Clean build after rename. `package-lock.json` regenerated.
+
+#### Point 2: Gateway Board UI Overhaul
+
+Full rewrite of `board.html` + `gateway.mjs` updates for demo polish.
+
+**UI changes:**
+- **Topbar**: "OIKOS BOARD" (no slash), 14px font, inline Oikos SVG logo on `#ebb743` brand colour background. Logo stays black in dark mode.
+- **KPI strip**: 3 boxes (Search 2fr, Peers 1fr, Listings 1fr). Removed agent/reputation KPIs (gateway is not an agent).
+- **Search**: Client-side filtering by title, description, agent name, tags.
+- **Tag cloud**: Aggregated from announcement `tags[]` via gateway API. Clickable pills filter board. Active state with brand yellow.
+- **Announcements**: Truncated ID + copy button ("Copied!" tooltip), REQUEST/OFFER/AUCTION badges (uppercase), per-announcement tag pills.
+- **Light mode**: Lighter palette (`--bg: #f5f2ec`, `--card: #faf8f4`, `--brand-yellow: #ebb743`). Dark mode unchanged.
+- **Footer**: Sticky bar — "built by" + Reshimu Labs SVG + CTA "Trade peer-to-peer — install Oikos Protocol".
+- **Layout**: Flex column (topbar + scrollable content + sticky footer).
+
+**Tags system (end-to-end):**
+- `BoardAnnouncement` type: added `tags: string[]`
+- `SwarmCoordinatorInterface.postAnnouncement`: added `tags?: string[]`
+- `coordinator.ts` + `mock.ts`: pass tags through
+- `MCP server`: added `tags` param to `swarm_announce` tool
+- `gateway.mjs`: store tags from announcements, aggregate top-20 tags in `/api/board` response
+- `board.html`: render tag cloud + per-announcement tags
+- `SKILL.md`: documented tags parameter
+
+**Gateway.mjs changes:**
+- SVG routes (`/oikos-logo.svg`, `/reshimu-labs.svg`) replace old `/logo.png`
+- Tags aggregation in `/api/board` (case-insensitive dedup, frequency-sorted, top 20)
+- Tags per announcement in API response
+- Title patching updated for new board structure
+
+#### Files Modified
+
+| File | Change |
+|------|--------|
+| `oikos-app/` → `oikos-wallet/` | Directory rename (git mv) |
+| `package.json` | Pear name, workspaces, script paths |
+| `oikos-wallet/package.json` | Package name, description |
+| `oikos-wallet/src/swarm/types.ts` | `tags: string[]` on BoardAnnouncement + interface |
+| `oikos-wallet/src/swarm/coordinator.ts` | Tags in postAnnouncement |
+| `oikos-wallet/src/swarm/mock.ts` | Tags in postAnnouncement + _peerAnnounces |
+| `oikos-wallet/src/types.ts` | `tags?: string[]` on SwarmAnnounceOpts |
+| `oikos-wallet/src/mcp/server.ts` | Tags param on swarm_announce tool |
+| `oikos-wallet/src/dashboard/public/board.html` | Full UI rewrite |
+| `scripts/gateway.mjs` | SVG routes, tags API, path updates |
+| `skills/wdk-wallet/SKILL.md` | Tags parameter docs |
+| `scripts/*.sh` | Path references (start-demo, start-live, update, install) |
+| `scripts/board-preview.mjs` | Path reference |
+| `docs/*.md` | Directory + product name references |
+| `examples/oikos-agent/*` | Comments and descriptions |
+| `index.js`, `app.js` | Pear app UI strings |
+| `README.md`, `ROADMAP.md`, `BUILD-LOG.md` | Product references |
+| `assets/reshimu-labs.svg` | New file (Reshimu Labs logo) |
+
+#### Commits
+
+- `f8fc172` — refactor: rename oikos-app → oikos-wallet, overhaul gateway board UI
+- `f7b16c9` — fix: dark mode logo stays black, footer reads "built by <logo>"
+
+---

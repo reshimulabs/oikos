@@ -1,7 +1,7 @@
 # ROADMAP.md — Oikos Protocol
 
 > This is a living document. Updated as decisions are made and scope evolves.
-> Last updated: 2026-03-16 (Trustless settlement architecture + dual-channel bid delivery + request/offer categories)
+> Last updated: 2026-03-16 (Topology rename + gateway board UI overhaul + tags system + trustless settlement architecture)
 
 ## Project Identity
 
@@ -632,6 +632,9 @@ Live market data, on-chain indexing, and encrypted seed management — all via o
 - [x] Real-time updates (polling or SSE)
 - [x] Architecture diagram in UI
 - [ ] Historical price charts (API ready: `/api/prices/history/:symbol`)
+- [x] Gateway board UI overhaul: inline SVG logos, search box, tag cloud, REQUEST/OFFER badges, announcement ID copy, lighter light-mode palette, sticky Reshimu Labs footer
+- [x] Tags system end-to-end: types → coordinator → mock → MCP → gateway API → board UI
+- [x] Topology rename: `oikos-app/` → `oikos-wallet/`, companion → `oikos-app`
 
 ### 6.2 Demo Script
 - [x] `scripts/start-demo.sh` — One command boots agent in mock mode (full-feature: swarm + ERC-8004)
