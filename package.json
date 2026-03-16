@@ -31,6 +31,7 @@
     "build": "npm run build --workspaces",
     "test": "npm run test --workspaces",
     "demo": "./scripts/start-demo.sh",
+    "live": "./scripts/start-live.sh",
     "generate-seed": "node scripts/generate-seed.js",
     "pear:dev": "pear run -d .",
     "start": "node oikos-app/dist/src/main.js",

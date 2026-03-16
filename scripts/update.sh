@@ -26,9 +26,9 @@ echo -e "${DIM}[1/3] git pull...${RESET}"
 git pull --ff-only 2>&1 | tail -3
 echo ""
 
-# 2. Install deps (in case new packages were added)
+# 2. Install deps (root + workspaces — npm workspaces handles everything from root)
 echo -e "${DIM}[2/3] npm install...${RESET}"
-npm install --workspaces 2>&1 | tail -3
+npm install 2>&1 | tail -5
 echo ""
 
 # 3. Build both workspaces (wallet-isolate + oikos-app)
@@ -61,5 +61,8 @@ if [[ "${1:-}" == "--restart" ]]; then
   echo -e "${GREEN}Stopped. Start again with: npm start${RESET}"
 fi
 
-echo -e "${GREEN}Done.${RESET} Run ${BOLD}npm start${RESET} to launch."
+echo -e "${GREEN}Done.${RESET}"
+echo -e "  ${BOLD}npm run demo${RESET}                         → Mock mode (all simulated)"
+echo -e "  ${BOLD}npm run live -- --name \"MyAgent\"${RESET}    → Live swarm (real P2P)"
+echo -e "  ${BOLD}npm start${RESET}                            → Raw start (uses .env)"
 echo ""
