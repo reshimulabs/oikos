@@ -41,13 +41,14 @@ export interface AgentIdentity {
 // ── Board Messages (Public Discovery) ──
 
 /**
- * Announcement category determines payment direction:
- * - 'request': "I need X done" → creator pays bidder
- * - 'offer':   "I'm offering X" → bidder pays creator
- * - 'service': alias for 'offer' (legacy)
- * - 'auction': "Selling to highest bidder" → bidder pays creator
+ * Announcement category determines payment direction.
+ * Simple rule: the buyer always pays.
+ *
+ * - 'buyer':   Creator is buying → creator pays bidder
+ * - 'seller':  Creator is selling → bidder pays creator
+ * - 'auction': Creator is selling to highest bidder → bidder pays creator
  */
-export type AnnouncementCategory = 'request' | 'offer' | 'service' | 'auction';
+export type AnnouncementCategory = 'buyer' | 'seller' | 'auction';
 
 export interface BoardAnnouncement {
   type: 'announcement';

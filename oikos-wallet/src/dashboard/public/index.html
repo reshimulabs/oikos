@@ -1220,7 +1220,7 @@ async function updateOverview() {
       : '<span style="color:var(--dim);font-size:11px;">No peers</span>';
     var anns = swarm.announcements || [];
     document.getElementById('ann-list').innerHTML = anns.length > 0
-      ? anns.slice(0,8).map(function(a){ return '<div class="ann-item"><span class="ann-cat cat-'+(a.category||'service')+'">'+(a.category||'service')+'</span> <strong>'+(a.title||'Untitled')+'</strong></div>'; }).join('')
+      ? anns.slice(0,8).map(function(a){ return '<div class="ann-item"><span class="ann-cat cat-'+(a.category||'seller')+'">'+(a.category||'seller')+'</span> <strong>'+(a.title||'Untitled')+'</strong></div>'; }).join('')
       : '<div class="empty">No announcements</div>';
     var rooms = swarm.activeRooms || [];
     document.getElementById('room-list').innerHTML = rooms.length > 0
@@ -1300,7 +1300,7 @@ async function updateSwarm() {
     : '<div class="empty">No peers</div>';
   var anns = swarm.announcements||[];
   document.getElementById('sw-anns').innerHTML = anns.length > 0
-    ? anns.slice(0,15).map(function(a){ return '<div class="ann-item"><span class="ann-cat cat-'+(a.category||'service')+'">'+(a.category||'service')+'</span> <strong>'+(a.title||'Untitled')+'</strong><br><span style="font-size:10px;color:var(--dim);">'+(a.agentName||'?')+' | '+(a.priceRange?a.priceRange.min+'-'+a.priceRange.max+' '+a.priceRange.symbol:'--')+'</span></div>'; }).join('')
+    ? anns.slice(0,15).map(function(a){ return '<div class="ann-item"><span class="ann-cat cat-'+(a.category||'seller')+'">'+(a.category||'seller')+'</span> <strong>'+(a.title||'Untitled')+'</strong><br><span style="font-size:10px;color:var(--dim);">'+(a.agentName||'?')+' | '+(a.priceRange?a.priceRange.min+'-'+a.priceRange.max+' '+a.priceRange.symbol:'--')+'</span></div>'; }).join('')
     : '<div class="empty">No announcements</div>';
   var rooms = swarm.activeRooms||[];
   document.getElementById('sw-rooms').innerHTML = rooms.length > 0

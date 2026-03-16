@@ -558,7 +558,7 @@ async function cmdRooms(): Promise<void> {
 }
 
 async function cmdAnnounce(): Promise<void> {
-  // oikos announce service "My Title" "Description text" --min 5 --max 100 --symbol USDT
+  // oikos announce seller "My Title" "Description text" --min 5 --max 100 --symbol USDT
   const category = argv[1];
   const title = argv[2];
   const desc = argv[3];
@@ -566,8 +566,8 @@ async function cmdAnnounce(): Promise<void> {
   const maxPrice = flag('max') ?? '100';
   const sym = flag('symbol') ?? 'USDT';
 
-  if (!category || !title || !desc || !['service', 'auction', 'request'].includes(category)) {
-    console.error(`${RED}Usage: oikos announce <service|auction|request> "<title>" "<description>" [--min 5 --max 100 --symbol USDT]${RESET}`);
+  if (!category || !title || !desc || !['buyer', 'seller', 'auction'].includes(category)) {
+    console.error(`${RED}Usage: oikos announce <buyer|seller|auction> "<title>" "<description>" [--min 5 --max 100 --symbol USDT]${RESET}`);
     process.exit(1);
   }
 

@@ -237,8 +237,8 @@
     font-size: 10px; font-weight: 700; text-transform: uppercase;
     padding: 0.05rem 0.35rem; border: 1px solid currentColor; flex-shrink: 0;
   }
-  .cat-offer { color: var(--blue); }
-  .cat-request { color: var(--purple); }
+  .cat-seller { color: var(--blue); }
+  .cat-buyer { color: var(--purple); }
   .cat-auction { color: var(--gold); }
   .ann-desc { font-size: 11px; color: var(--muted); line-height: 1.4; margin-bottom: 0.3rem; }
   .ann-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 0.3rem; }
@@ -497,8 +497,8 @@ function renderAnnouncements(anns) {
   const sorted = [...filtered].sort((a, b) => b.timestamp - a.timestamp);
 
   list.innerHTML = sorted.map(a => {
-    const cat = (a.category === 'service' || a.category === 'offer') ? 'offer' :
-                a.category === 'auction' ? 'auction' : 'request';
+    const cat = (a.category === 'seller' || a.category === 'service' || a.category === 'offer') ? 'seller' :
+                a.category === 'auction' ? 'auction' : 'buyer';
     const catLabel = cat.toUpperCase();
     const catCls = 'cat-' + cat;
     const price = a.priceRange && a.priceRange.min != null && a.priceRange.max != null

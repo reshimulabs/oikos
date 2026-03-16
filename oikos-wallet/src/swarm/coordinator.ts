@@ -364,9 +364,9 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
   }
 
   /** Submit payment for an accepted task.
-   *  Payment direction depends on announcement category:
-   *  - 'request': creator pays bidder (creator requested a service)
-   *  - 'offer'/'service'/'auction': bidder pays creator (creator is selling/offering)
+   *  Payment direction: the buyer always pays.
+   *  - 'buyer': creator is buying → creator pays bidder
+   *  - 'seller'/'auction': creator is selling → bidder pays creator
    *  Either party can call this — the system determines who should pay. */
   async submitPayment(announcementId: string): Promise<void> {
     const room = this.marketplace.getRoom(announcementId);
@@ -375,18 +375,18 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
     const category = room.announcement.category;
     const iAmCreator = room.role === 'creator';
 
-    // Determine payment direction:
-    // 'request' = creator needs something → creator pays bidder
-    // 'service'/'auction' = creator is offering/selling → bidder pays creator
-    const creatorPays = category === 'request';
+    // The buyer always pays.
+    // 'buyer' = creator is the buyer → creator pays bidder
+    // 'seller'/'auction' = creator is selling → bidder (the buyer) pays creator
+    const creatorPays = category === 'buyer';
 
     // Validate: only the payer should call submitPayment
     if (creatorPays && !iAmCreator) {
-      console.error(`[swarm] Cannot pay: you are the bidder on a 'request' announcement. The creator pays.`);
+      console.error(`[swarm] Cannot pay: you are the bidder on a 'buyer' announcement. The creator (buyer) pays.`);
       return;
     }
     if (!creatorPays && iAmCreator) {
-      console.error(`[swarm] Cannot pay: you are the creator of a '${category}' announcement. The bidder pays.`);
+      console.error(`[swarm] Cannot pay: you are the creator (seller) of a '${category}' announcement. The bidder (buyer) pays.`);
       return;
     }
 

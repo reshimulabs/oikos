@@ -228,7 +228,7 @@ await swarm.start();
 
 ```javascript
 const announcementId = swarm.postAnnouncement({
-  category: 'service',
+  category: 'seller',
   title: 'Real-time XAUt price feed',
   description: 'Sub-second gold price updates from aggregated sources',
   priceRange: { min: '100000', max: '500000', symbol: 'USDT' },

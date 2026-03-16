@@ -81,13 +81,13 @@ export class MockSwarmCoordinator implements SwarmCoordinatorInterface {
     this._schedule(2000, () => this._peerConnects(this.peers[0]!));
     this._schedule(4000, () => this._peerConnects(this.peers[1]!));
     this._schedule(7000, () => this._peerAnnounces(this.peers[0]!, {
-      category: 'service',
+      category: 'seller',
       title: 'Real-time price feed (USDt/XAUt/USAt)',
       description: 'Streaming price data for all Tether assets. Updated every 5 seconds.',
       priceRange: { min: '0.5', max: '2', symbol: 'USDT' },
     }));
     this._schedule(12000, () => this._peerAnnounces(this.peers[1]!, {
-      category: 'service',
+      category: 'seller',
       title: 'Yield optimization analysis',
       description: 'Analyze DeFi protocols and recommend best yield strategies for your portfolio.',
       priceRange: { min: '1', max: '5', symbol: 'USDT' },

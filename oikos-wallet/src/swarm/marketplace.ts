@@ -235,9 +235,9 @@ export class Marketplace {
 
   /**
    * Update economics after a room settles.
-   * Payment direction depends on announcement category:
-   * - 'request': creator pays bidder → creator has cost, bidder has revenue
-   * - 'offer'/'service'/'auction': bidder pays creator → creator has revenue, bidder has cost
+   * The buyer always pays.
+   * - 'buyer': creator is buying → creator pays bidder
+   * - 'seller'/'auction': creator is selling → bidder (buyer) pays creator
    */
   private _updateEconomics(room: ActiveRoom): void {
     if (!room.agreedPrice) return;
@@ -246,7 +246,7 @@ export class Marketplace {
     if (isNaN(amount)) return;
 
     const category = room.announcement.category;
-    const creatorPays = category === 'request';
+    const creatorPays = category === 'buyer';
 
     // Determine if WE paid or received based on our role + category
     const wePaid = (room.role === 'creator' && creatorPays)

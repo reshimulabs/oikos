@@ -12,7 +12,7 @@ import type { BrainAdapter, ChatMessage } from './brain/adapter.js';
 
 /** Swarm announcement posting options */
 export interface SwarmAnnounceOpts {
-  category: 'service' | 'auction' | 'request';
+  category: 'buyer' | 'seller' | 'auction';
   title: string;
   description: string;
   priceRange: { min: string; max: string; symbol: string };

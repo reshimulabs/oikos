@@ -112,7 +112,7 @@ function handleBoardMessage(msg, fromPubkey) {
       agentPubkey: msg.agentPubkey || fromPubkey,
       agentName: msg.agentName || 'Unknown',
       reputation: msg.reputation ?? 0,
-      category: msg.category || 'service',
+      category: msg.category || 'seller',
       title: msg.title || '',
       description: msg.description || '',
       priceRange: msg.priceRange || null,

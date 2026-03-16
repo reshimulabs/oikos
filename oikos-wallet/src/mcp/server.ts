@@ -172,11 +172,11 @@ const TOOLS: MCPTool[] = [
   },
   {
     name: 'swarm_announce',
-    description: 'Post an announcement to the swarm board. Category determines payment direction: "request" = you pay the bidder (you need something done), "offer" = bidder pays you (you are selling a service).',
+    description: 'Post an announcement to the swarm board. The buyer always pays. "buyer" = you are buying (you pay the bidder). "seller" = you are selling (bidder pays you).',
     inputSchema: {
       type: 'object',
       properties: {
-        category: { type: 'string', enum: ['request', 'offer', 'service', 'auction'], description: '"request" = you need something (you pay). "offer" = you are selling (bidder pays).' },
+        category: { type: 'string', enum: ['buyer', 'seller', 'auction'], description: '"buyer" = you are buying (you pay). "seller" = you are selling (bidder pays).' },
         title: { type: 'string' },
         description: { type: 'string' },
         minPrice: { type: 'string' },
@@ -215,7 +215,7 @@ const TOOLS: MCPTool[] = [
   },
   {
     name: 'swarm_submit_payment',
-    description: 'Submit payment for an accepted bid. Payment direction is automatic: "request" announcements = creator pays bidder. "offer"/"service" announcements = bidder pays creator. Only the correct payer can call this. Goes through PolicyEngine.',
+    description: 'Submit payment for an accepted bid. The buyer always pays. "buyer" announcements = creator pays bidder. "seller"/"auction" announcements = bidder pays creator. Only the correct payer can call this. Goes through PolicyEngine.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -414,7 +414,7 @@ const handlers: Record<string, ToolHandler> = {
   async swarm_announce(params, svc) {
     if (!svc.swarm) return { error: 'Swarm not enabled' };
     const id = svc.swarm.postAnnouncement({
-      category: params['category'] as 'service' | 'auction' | 'request',
+      category: params['category'] as 'buyer' | 'seller' | 'auction',
       title: params['title'] as string,
       description: params['description'] as string,
       priceRange: { min: params['minPrice'] as string, max: params['maxPrice'] as string, symbol: params['symbol'] as string },
