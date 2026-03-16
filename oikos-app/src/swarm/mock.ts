@@ -124,7 +124,7 @@ export class MockSwarmCoordinator implements SwarmCoordinatorInterface {
   }
 
   postAnnouncement(opts: {
-    category: 'service' | 'auction' | 'request';
+    category: import('./types.js').AnnouncementCategory;
     title: string;
     description: string;
     priceRange: { min: string; max: string; symbol: string };
@@ -348,7 +348,7 @@ export class MockSwarmCoordinator implements SwarmCoordinatorInterface {
   }
 
   private _peerAnnounces(peer: MockPeer, opts: {
-    category: 'service' | 'auction' | 'request';
+    category: import('./types.js').AnnouncementCategory;
     title: string;
     description: string;
     priceRange: { min: string; max: string; symbol: string };

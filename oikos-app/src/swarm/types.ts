@@ -40,13 +40,22 @@ export interface AgentIdentity {
 
 // ── Board Messages (Public Discovery) ──
 
+/**
+ * Announcement category determines payment direction:
+ * - 'request': "I need X done" → creator pays bidder
+ * - 'offer':   "I'm offering X" → bidder pays creator
+ * - 'service': alias for 'offer' (legacy)
+ * - 'auction': "Selling to highest bidder" → bidder pays creator
+ */
+export type AnnouncementCategory = 'request' | 'offer' | 'service' | 'auction';
+
 export interface BoardAnnouncement {
   type: 'announcement';
   id: string;
   agentPubkey: string;
   agentName: string;
   reputation: number;
-  category: 'service' | 'auction' | 'request';
+  category: AnnouncementCategory;
   title: string;
   description: string;
   priceRange: { min: string; max: string; symbol: string };
@@ -311,7 +320,7 @@ export interface SwarmCoordinatorInterface {
   getState(): SwarmState;
   onEvent(handler: (event: SwarmEvent) => void): void;
   postAnnouncement(opts: {
-    category: 'service' | 'auction' | 'request';
+    category: AnnouncementCategory;
     title: string;
     description: string;
     priceRange: { min: string; max: string; symbol: string };

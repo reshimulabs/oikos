@@ -176,7 +176,7 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
 
   /** Post an announcement to the board */
   postAnnouncement(opts: {
-    category: 'service' | 'auction' | 'request';
+    category: import('./types.js').AnnouncementCategory;
     title: string;
     description: string;
     priceRange: { min: string; max: string; symbol: string };
@@ -332,13 +332,47 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
     return accept;
   }
 
-  /** Submit payment for an accepted task */
+  /** Submit payment for an accepted task.
+   *  Payment direction depends on announcement category:
+   *  - 'request': creator pays bidder (creator requested a service)
+   *  - 'offer'/'service'/'auction': bidder pays creator (creator is selling/offering)
+   *  Either party can call this — the system determines who should pay. */
   async submitPayment(announcementId: string): Promise<void> {
     const room = this.marketplace.getRoom(announcementId);
     if (!room || !room.acceptedBid || !room.agreedPrice || !room.agreedSymbol) return;
 
-    // Find the accept message details
-    const acceptedBid = room.acceptedBid;
+    const category = room.announcement.category;
+    const iAmCreator = room.role === 'creator';
+
+    // Determine payment direction:
+    // 'request' = creator needs something → creator pays bidder
+    // 'service'/'auction' = creator is offering/selling → bidder pays creator
+    const creatorPays = category === 'request';
+
+    // Validate: only the payer should call submitPayment
+    if (creatorPays && !iAmCreator) {
+      console.error(`[swarm] Cannot pay: you are the bidder on a 'request' announcement. The creator pays.`);
+      return;
+    }
+    if (!creatorPays && iAmCreator) {
+      console.error(`[swarm] Cannot pay: you are the creator of a '${category}' announcement. The bidder pays.`);
+      return;
+    }
+
+    // Determine recipient address
+    let toAddress: string;
+    if (creatorPays) {
+      // Creator pays bidder — use bidder's pubkey as address (best effort)
+      toAddress = room.acceptedBid.bidderPubkey.slice(0, 42);
+    } else {
+      // Bidder pays creator — use creator's pubkey as address
+      toAddress = room.announcement.agentPubkey.slice(0, 42);
+    }
+
+    const directionLabel = creatorPays
+      ? `${room.announcement.agentName} → ${room.acceptedBid.bidderName}`
+      : `${room.acceptedBid.bidderName} → ${room.announcement.agentName}`;
+    console.error(`[swarm] Payment direction: ${directionLabel} (${room.agreedPrice} ${room.agreedSymbol})`);
 
     // Build payment proposal and send via wallet IPC
     // This goes through PolicyEngine — source='swarm'
@@ -347,11 +381,11 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
         amount: room.agreedPrice,
         symbol: room.agreedSymbol as 'USDT' | 'BTC' | 'XAUT' | 'USAT' | 'ETH',
         chain: 'ethereum' as const,
-        reason: `Swarm payment for: ${room.announcement.title}`,
+        reason: `Swarm payment for: ${room.announcement.title} [${directionLabel}]`,
         confidence: 0.9,
         strategy: 'swarm-settlement',
         timestamp: Date.now(),
-        to: acceptedBid.bidderPubkey.slice(0, 42), // PaymentProposal field
+        to: toAddress,
       } as unknown as import('../ipc/types.js').ProposalCommon);
 
       if (result.status === 'executed') {

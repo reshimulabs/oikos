@@ -172,11 +172,11 @@ const TOOLS: MCPTool[] = [
   },
   {
     name: 'swarm_announce',
-    description: 'Post an announcement to the swarm board (service, auction, or request).',
+    description: 'Post an announcement to the swarm board. Category determines payment direction: "request" = you pay the bidder (you need something done), "offer" = bidder pays you (you are selling a service).',
     inputSchema: {
       type: 'object',
       properties: {
-        category: { type: 'string', enum: ['service', 'auction', 'request'] },
+        category: { type: 'string', enum: ['request', 'offer', 'service', 'auction'], description: '"request" = you need something (you pay). "offer" = you are selling (bidder pays).' },
         title: { type: 'string' },
         description: { type: 'string' },
         minPrice: { type: 'string' },
