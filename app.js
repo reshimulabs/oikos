@@ -1,5 +1,5 @@
 /**
- * Oikos Companion — Pear Runtime Frontend
+ * Oikos App — Pear Runtime Frontend
  *
  * Vanilla JS frontend for the Oikos Pear desktop app.
  * Communicates with the Bare main process via internal HTTP API on :13421.
@@ -516,7 +516,7 @@ async function updateCurrentView () {
 /* ═══ BOOT ═══ */
 
 async function boot () {
-  console.log('[app] Booting Oikos Companion...')
+  console.log('[app] Booting Oikos App...')
 
   // 1. Wait for bare-http1 internal API
   var ready = false
@@ -555,7 +555,7 @@ async function boot () {
   // 5. Price refresh (60 seconds)
   setInterval(fetchPrices, 60000)
 
-  console.log('[app] Oikos Companion ready.')
+  console.log('[app] Oikos App ready.')
 }
 
 boot()

@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Oikos Companion</title>
+  <title>Oikos App</title>
   <!-- Font: system monospace fallback (no external requests in Pear Runtime) -->
   <style>
     :root {
-      --bg: #f0ebe1;
-      --bg2: #e8e2d6;
-      --card: #f7f3eb;
-      --card-hover: #ede8de;
-      --border: #c8c0b0;
-      --border-light: #b8b0a0;
+      --bg: #f5f2ec;
+      --bg2: #edeae4;
+      --card: #faf8f4;
+      --card-hover: #f0ede7;
+      --border: #d4cfc6;
+      --border-light: #c8c3ba;
       --text: #1a1a1a;
       --muted: #6b6358;
       --dim: #9a9184;
@@ -21,7 +21,7 @@
       --red: #c0392b;
       --red-bg: #f8d7da;
       --yellow: #d4a017;
-      --yellow-bg: #FFD000;
+      --yellow-bg: #ebb743;
       --blue: #2874a6;
       --blue-bg: #a8d8ea;
       --purple: #6c3483;
@@ -31,7 +31,7 @@
       --chat-agent: #c5e0f0;
       --chat-human: #f5ebb8;
       --chat-approval: #f8c4c4;
-      --brand-yellow: #FFD000;
+      --brand-yellow: #ebb743;
       --brand-black: #1a1a1a;
       --chat-w: 380px;
     }
@@ -102,10 +102,10 @@
       display: flex; align-items: center; padding: 0 1.25rem;
       border-left: 2px solid var(--brand-black);
     }
-    .logo-text { font-size: 22px; font-weight: 800; color: var(--brand-black); letter-spacing: 0.08em; }
-    .logo-slash {
-      display: inline-block; width: 3px; height: 28px;
-      background: var(--brand-black); transform: skewX(-12deg); margin-left: 2px;
+    .logo-block svg {
+      height: 36px;
+      width: auto;
+      color: #1a1a1a;
     }
 
     /* ═══ LAYOUT ═══ */
@@ -250,6 +250,7 @@
     .ann-item { padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 12px; }
     .ann-item:last-child { border-bottom: none; }
     .ann-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 0.05rem 0.35rem; border: 1px solid currentColor; }
+    .cat-seller { color: var(--green); } .cat-buyer { color: var(--blue); } .cat-auction { color: var(--gold); }
     .cat-service { color: var(--blue); } .cat-compute { color: var(--purple); } .cat-data { color: var(--cyan); } .cat-defi { color: var(--gold); }
     .room-item { padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 12px; }
     .room-item:last-child { border-bottom: none; }
@@ -293,7 +294,7 @@
         --red: #f87171;
         --red-bg: #3a1a1a;
         --yellow: #fbbf24;
-        --yellow-bg: #FFD000;
+        --yellow-bg: #ebb743;
         --blue: #60a5fa;
         --blue-bg: #1a2a4a;
         --purple: #a78bfa;
@@ -328,11 +329,11 @@
 <body>
 
 <div class="titlebar">
-  <span class="titlebar-title">Oikos Companion</span>
+  <span class="titlebar-title">Oikos App</span>
   <div class="titlebar-right">
     <span class="status-item"><span class="status-dot off" id="td-wallet"></span> Wallet</span>
     <span class="status-item"><span class="status-dot off" id="td-swarm"></span> Swarm</span>
-    <span class="status-item"><span class="status-dot off" id="td-companion"></span> P2P</span>
+    <span class="status-item"><span class="status-dot off" id="td-companion"></span> Agent</span>
     <span id="refresh-ts" style="font-size:10px;color:var(--dim);"></span>
   </div>
 </div>
@@ -348,7 +349,16 @@
   </nav>
   <div class="topbar-logo">
     <div class="logo-block">
-      <span class="logo-text">OIKO<span class="logo-slash"></span></span>
+      <svg viewBox="0 0 165.48256 54.091259" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Oikos">
+        <g transform="translate(-19.482719,-175.4493)">
+          <circle fill="currentColor" cx="51.843533" cy="203.35382" r="17.687586"/>
+          <circle fill="currentColor" cx="120.92068" cy="203.36241" r="17.733706"/>
+          <path fill="currentColor" d="m 84.047666,185.65206 h 24.409814 l -15.713526,18.13847 17.129966,17.24293 H 84.153249 Z"/>
+          <rect fill="currentColor" width="8.4932919" height="35.399162" x="72.367882" y="185.64366"/>
+          <path fill="currentColor" d="m 141.36924,185.61145 v 29.03005 l 25.43894,-29.05908 z"/>
+          <path fill="currentColor" d="m 166.74075,220.99018 v -28.94175 l -25.43894,28.97078 z"/>
+        </g>
+      </svg>
     </div>
   </div>
 </div>
@@ -602,7 +612,7 @@
     <div class="chat-header"><div class="chat-title">Chat</div></div>
     <div class="chat-messages" id="chat-messages">
       <div class="chat-msg system">
-        <div class="chat-bubble">Welcome to Oikos Companion. Send instructions to your agent below. All proposals flow through the PolicyEngine.</div>
+        <div class="chat-bubble">Welcome to Oikos App. Send instructions to your agent below. All proposals flow through the PolicyEngine.</div>
       </div>
     </div>
     <div class="chat-input-area">
