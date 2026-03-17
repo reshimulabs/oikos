@@ -12,7 +12,51 @@
  *
  * Individual overrides still work:
  *   OIKOS_MODE=testnet MOCK_EVENTS=false → real wallet, real events
+ *
+ * .env loading: Searches for .env in CWD and repo root (parent of oikos-wallet/).
+ * No dotenv dependency — lightweight inline loader. Existing env vars take precedence.
  */
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+// ── Lightweight .env loader (no dotenv dependency) ──
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+/** Load .env file into process.env (existing vars take precedence) */
+function loadDotEnv(filePath) {
+    if (!existsSync(filePath))
+        return;
+    try {
+        const content = readFileSync(filePath, 'utf8');
+        for (const line of content.split('\n')) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#'))
+                continue;
+            const eqIdx = trimmed.indexOf('=');
+            if (eqIdx === -1)
+                continue;
+            const key = trimmed.slice(0, eqIdx).trim();
+            let value = trimmed.slice(eqIdx + 1).trim();
+            // Strip surrounding quotes
+            if ((value.startsWith('"') && value.endsWith('"')) ||
+                (value.startsWith("'") && value.endsWith("'"))) {
+                value = value.slice(1, -1);
+            }
+            // Existing env vars take precedence (don't override)
+            if (process.env[key] === undefined || process.env[key] === '') {
+                process.env[key] = value;
+            }
+        }
+    }
+    catch {
+        // Silently ignore .env read errors
+    }
+}
+// Search for .env: CWD first, then repo root (parent of oikos-wallet/)
+// At runtime __dirname = dist/src/config/ → 4 levels up to repo root
+const repoRoot = join(__dirname, '..', '..', '..', '..');
+loadDotEnv(join(process.cwd(), '.env'));
+loadDotEnv(join(repoRoot, '.env'));
 function getEnv(key, fallback) {
     const value = process.env[key];
     if (value !== undefined && value !== '')
@@ -35,7 +79,8 @@ export function loadOikosConfig() {
         mode,
         dashboardPort: parseInt(getEnv('DASHBOARD_PORT', '3420'), 10),
         dashboardHost: getEnv('DASHBOARD_HOST', '127.0.0.1'),
-        walletIsolatePath: getEnv('WALLET_ISOLATE_PATH', '../wallet-isolate/dist/src/main.js'),
+        // __dirname = oikos-wallet/dist/src/config → go up 4 levels to repo root
+        walletIsolatePath: getEnv('WALLET_ISOLATE_PATH', join(__dirname, '..', '..', '..', '..', 'wallet-isolate', 'dist', 'src', 'main.js')),
         mockWallet: resolveMock('MOCK_WALLET', mode),
         policyFile: getEnv('POLICY_FILE', ''),
         auditLogPath: getEnv('AUDIT_LOG_PATH', 'audit.jsonl'),

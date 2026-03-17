@@ -12,6 +12,9 @@
  *
  * Individual overrides still work:
  *   OIKOS_MODE=testnet MOCK_EVENTS=false → real wallet, real events
+ *
+ * .env loading: Searches for .env in CWD and repo root (parent of oikos-wallet/).
+ * No dotenv dependency — lightweight inline loader. Existing env vars take precedence.
  */
 export type OikosMode = 'mock' | 'testnet' | 'mainnet';
 export interface OikosConfig {
