@@ -33,7 +33,15 @@ export interface CompanionSwarmStatus {
   peersConnected: number;
   activeRooms: number;
   announcements: number;
-  economics: { totalRevenue: string; totalCosts: string; sustainabilityScore: number };
+  /** Full peer list for UI rendering */
+  boardPeers?: Array<{ name: string; pubkey: string; reputation: number }>;
+  /** Full announcement list for UI rendering */
+  announcementList?: Array<{ id: string; title: string; category: string; agentName: string; description: string; priceRange?: { min: string; max: string; symbol: string }; reputation: number; timestamp: number }>;
+  /** Full room list for UI rendering */
+  roomList?: Array<{ announcementId: string; status: string; announcement: { title: string }; bids: number }>;
+  /** Agent identity on the swarm */
+  identity?: { name: string; reputation: number };
+  economics: { totalRevenue: string; totalCosts: string; sustainabilityScore: number; dealsCompleted?: number };
   timestamp: number;
 }
 

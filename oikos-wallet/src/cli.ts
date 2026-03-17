@@ -25,6 +25,8 @@
  *   oikos rgb assets                       RGB assets
  *   oikos rgb issue <t> <n> <s>            Issue RGB asset
  *   oikos rgb transfer <inv> <amt>         Transfer RGB asset
+ *   oikos chat "message"                   Chat with agent brain
+ *   oikos chat                             Interactive chat mode
  *
  * Flags: --port 3420, --json, --reason "...", --confidence 0.85
  */
@@ -790,6 +792,60 @@ async function cmdSimulate(): Promise<void> {
   }
 }
 
+async function cmdChat(): Promise<void> {
+  const message = argv.slice(1).join(' ').trim();
+
+  if (message) {
+    // Single message mode: oikos chat "Send 1 USDT to 0x..."
+    const data = await post('/api/agent/chat', { message }) as {
+      reply?: string; from?: string; brainName?: string; error?: string;
+    };
+    if (jsonOutput) { out(data); return; }
+    if (data.error) {
+      console.error(`${RED}${data.error}${RESET}`);
+      return;
+    }
+    console.log(`${DIM}[${data.brainName ?? 'agent'}]${RESET} ${data.reply ?? ''}`);
+    return;
+  }
+
+  // Interactive chat mode: oikos chat
+  const readline = await import('readline');
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  console.log(`${BOLD}oikos chat${RESET} — Talk to your agent brain`);
+  console.log(`${DIM}Type a message and press Enter. Ctrl+C to exit.${RESET}\n`);
+
+  const prompt = (): void => {
+    rl.question(`${CYAN}you>${RESET} `, async (input: string) => {
+      const text = input.trim();
+      if (!text) { prompt(); return; }
+
+      try {
+        const data = await post('/api/agent/chat', { message: text }) as {
+          reply?: string; brainName?: string; error?: string;
+        };
+        if (data.error) {
+          console.log(`${RED}${data.error}${RESET}`);
+        } else {
+          console.log(`${GREEN}${data.brainName ?? 'agent'}>${RESET} ${data.reply ?? ''}\n`);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.log(`${RED}Error: ${msg}${RESET}`);
+      }
+      prompt();
+    });
+  };
+
+  prompt();
+  // Keep alive — readline handles exit via Ctrl+C
+  await new Promise(() => {});
+}
+
 function showHelp(): void {
   console.log(`${BOLD}oikos${RESET} — Sovereign AI Agent Wallet
 
@@ -821,6 +877,10 @@ ${BOLD}Swarm:${RESET}
   oikos bid <id> <price> [sym]            Bid on announcement
   oikos accept <id>                       Accept best bid (creator)
   oikos settle <id>                       Submit payment (creator)
+
+${BOLD}Chat:${RESET}
+  oikos chat "message"                   Send one message to brain
+  oikos chat                             Interactive chat mode
 
 ${BOLD}Simulate:${RESET}
   oikos simulate <type> <amt> <sym>      Dry-run policy check
@@ -863,6 +923,7 @@ async function main(): Promise<void> {
       case 'identity': case 'id': await cmdIdentity(); break;
       case 'prices': await cmdPrices(); break;
       case 'rgb': await cmdRgb(); break;
+      case 'chat': case 'ask': case 'c': await cmdChat(); break;
       case 'simulate': case 'sim': case 'dryrun': case 'dry-run': await cmdSimulate(); break;
       case 'help': case '--help': case '-h': showHelp(); break;
       case '': showHelp(); break;

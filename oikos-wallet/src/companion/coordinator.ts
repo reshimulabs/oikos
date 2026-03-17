@@ -294,7 +294,7 @@ export class CompanionCoordinator {
       this.send(policyMsg);
     } catch { /* wallet may not be ready */ }
 
-    // Swarm status
+    // Swarm status (with full data for UI rendering)
     if (this.swarm) {
       const swarmState = this.swarm.getState();
       const swarmMsg: CompanionSwarmStatus = {
@@ -302,10 +302,25 @@ export class CompanionCoordinator {
         peersConnected: swarmState.boardPeers.length,
         activeRooms: swarmState.activeRooms.length,
         announcements: swarmState.announcements.length,
+        boardPeers: swarmState.boardPeers.map((p: { name: string; pubkey: string; reputation: number }) => ({
+          name: p.name, pubkey: p.pubkey, reputation: p.reputation,
+        })),
+        announcementList: swarmState.announcements.map((a: { id: string; title: string; category: string; agentName: string; description: string; priceRange?: { min: string; max: string; symbol: string }; reputation: number; timestamp: number }) => ({
+          id: a.id, title: a.title, category: a.category, agentName: a.agentName,
+          description: a.description, priceRange: a.priceRange,
+          reputation: a.reputation, timestamp: a.timestamp,
+        })),
+        roomList: swarmState.activeRooms.map((r: { announcementId: string; status: string; announcement: { title: string }; bids: Array<unknown> }) => ({
+          announcementId: r.announcementId, status: r.status,
+          announcement: { title: r.announcement?.title ?? 'Room' },
+          bids: r.bids?.length ?? 0,
+        })),
+        identity: swarmState.identity ? { name: swarmState.identity.name, reputation: swarmState.identity.reputation } : undefined,
         economics: {
           totalRevenue: swarmState.economics.totalRevenue,
           totalCosts: swarmState.economics.totalCosts,
           sustainabilityScore: swarmState.economics.sustainabilityScore,
+          dealsCompleted: swarmState.economics.completedTasks,
         },
         timestamp: Date.now(),
       };

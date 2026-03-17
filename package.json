@@ -26,6 +26,9 @@
     "wallet-isolate",
     "oikos-wallet"
   ],
+  "bin": {
+    "oikos": "oikos-wallet/dist/src/cli.js"
+  },
   "scripts": {
     "update": "./scripts/update.sh",
     "build": "npm run build --workspaces",

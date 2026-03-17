@@ -154,6 +154,10 @@ function handleAgentMessage (buf) {
           peersConnected: msg.peersConnected || 0,
           activeRooms: msg.activeRooms || 0,
           announcements: msg.announcements || 0,
+          boardPeers: msg.boardPeers || [],
+          announcementList: msg.announcementList || [],
+          roomList: msg.roomList || [],
+          identity: msg.identity || null,
           economics: msg.economics || {}
         }
         break
@@ -338,7 +342,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/swarm') {
-    return json(res, { enabled: state.swarm.enabled, ...state.swarm })
+    return json(res, {
+      enabled: state.swarm.enabled,
+      peersConnected: state.swarm.peersConnected,
+      boardPeers: state.swarm.boardPeers || [],
+      announcements: state.swarm.announcementList || [],
+      activeRooms: state.swarm.roomList || [],
+      identity: state.swarm.identity || null,
+      economics: state.swarm.economics || {},
+      recentEvents: []
+    })
   }
 
   if (url === '/api/economics') {

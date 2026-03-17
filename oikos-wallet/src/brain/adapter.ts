@@ -23,6 +23,8 @@ export interface WalletContext {
   recentAudit: Array<{ type: string; status?: string; timestamp?: string }>;
   identity: { registered: boolean; agentId: string | null };
   swarmPeers: number;
+  swarmAnnouncements: Array<{ id: string; title: string; category: string; agentName: string; priceRange?: { min: string; max: string; symbol: string } }>;
+  swarmRooms: Array<{ announcementId: string; status: string; bids: number }>;
 }
 
 /** Chat message stored in history */
@@ -43,17 +45,40 @@ export interface BrainAdapter {
 
 // ── Ollama Adapter (default — sovereign, local) ──
 
-const WALLET_SYSTEM_PROMPT = `You are the Oikos Agent — an autonomous AI managing a self-custodial multi-chain cryptocurrency wallet.
+const WALLET_SYSTEM_PROMPT = `You are the Oikos Agent — an autonomous AI managing a self-custodial multi-chain cryptocurrency wallet via the Oikos Protocol.
 
-You have access to wallet operations via MCP tools at http://127.0.0.1:3420/mcp. Your capabilities:
-- Check balances across all chains (BTC, ETH, USDT, XAUT, USAT)
-- Send payments, swap tokens, bridge assets, deposit yield
-- Monitor swarm peers and negotiate with other agents
-- All operations are policy-enforced (spending limits, cooldowns, whitelists)
+You operate through MCP tools at http://127.0.0.1:3420/mcp. All operations go through the PolicyEngine in the Wallet Isolate (a separate process). You NEVER have access to private keys or seed phrases — they exist in a different process you cannot reach.
 
-When the user asks you to perform wallet operations, reason about the request and explain what you'll do. For actual execution, describe the action clearly.
+## Your MCP Tools
 
-Be concise, direct, and precise with numbers. You manage real value — treat every operation seriously.`;
+### Wallet Operations
+- propose_payment: Send tokens. Args: amount, symbol, chain, to, reason, confidence
+- propose_swap: Swap tokens (e.g. USDT→XAUT). Args: amount, symbol, toSymbol, chain, reason, confidence
+- propose_bridge: Bridge cross-chain. Args: amount, symbol, fromChain, toChain, reason, confidence
+- propose_yield: Deposit/withdraw yield. Args: amount, symbol, chain, protocol, action (deposit|withdraw), reason, confidence
+- wallet_balance_all: Get all balances
+- wallet_address: Get wallet addresses
+- policy_status: Check spending limits and cooldowns
+
+### Swarm Operations (P2P Agent Marketplace)
+- swarm_announce: Post listing on the board. Args: category (seller|buyer|auction), title, description, minPrice, maxPrice, symbol, tags[]
+- swarm_bid: Bid on a listing. Args: announcementId, price, symbol, reason
+- swarm_accept_bid: Accept best bid (if you're the creator). Args: announcementId
+- swarm_submit_payment: Execute payment for accepted deal. Args: announcementId
+- swarm_cancel_room: Cancel a negotiation. Args: announcementId
+- swarm_room_state: Check negotiation status. Args: announcementId
+- swarm_state: Get full swarm state (peers, board, rooms)
+
+### Read-Only
+- audit_log: Transaction history
+- agent_state: Overall agent state
+
+## Rules
+- When asked to perform an operation, DO IT by calling the appropriate MCP tool via the REST API. Don't just describe what you would do.
+- For swarm announcements: pick appropriate category (seller if offering something, buyer if requesting something).
+- All write operations go through the PolicyEngine. If rejected, explain the policy violation.
+- Be concise, direct, precise with numbers. You manage real value.
+- NEVER claim to have access to seed phrases or private keys. You don't. They are in a separate process.`;
 
 export class OllamaBrainAdapter implements BrainAdapter {
   readonly name = 'ollama';
@@ -128,8 +153,21 @@ export class OllamaBrainAdapter implements BrainAdapter {
       lines.push(`\n### Identity\nERC-8004 registered, agentId: ${ctx.identity.agentId}`);
     }
 
-    if (ctx.swarmPeers > 0) {
+    if (ctx.swarmPeers > 0 || ctx.swarmAnnouncements.length > 0) {
       lines.push(`\n### Swarm\n${ctx.swarmPeers} peers connected`);
+      if (ctx.swarmAnnouncements.length > 0) {
+        lines.push(`\n**Board Announcements** (${ctx.swarmAnnouncements.length}):`);
+        for (const a of ctx.swarmAnnouncements.slice(0, 10)) {
+          const price = a.priceRange ? `${a.priceRange.min}-${a.priceRange.max} ${a.priceRange.symbol}` : 'N/A';
+          lines.push(`- [${a.id.slice(0, 8)}] ${a.category}: "${a.title}" by ${a.agentName} (${price})`);
+        }
+      }
+      if (ctx.swarmRooms.length > 0) {
+        lines.push(`\n**Active Rooms** (${ctx.swarmRooms.length}):`);
+        for (const r of ctx.swarmRooms.slice(0, 5)) {
+          lines.push(`- [${r.announcementId.slice(0, 8)}] ${r.status}, ${r.bids} bid(s)`);
+        }
+      }
     }
 
     return lines.join('\n');
@@ -252,7 +290,11 @@ export async function buildWalletContext(services: OikosServices): Promise<Walle
     services.wallet.queryAudit(5).catch(() => [] as Array<{ type: string; status?: string; timestamp?: string }>),
   ]);
 
-  const swarmState = services.swarm?.getState() as { boardPeers?: unknown[] } | undefined;
+  const swarmState = services.swarm?.getState() as {
+    boardPeers?: unknown[];
+    announcements?: Array<{ id: string; title: string; category: string; agentName: string; priceRange?: { min: string; max: string; symbol: string } }>;
+    rooms?: Array<{ announcementId: string; status: string; bids: Array<unknown> }>;
+  } | undefined;
 
   return {
     balances: balances as Array<{ symbol: string; chain: string; formatted: string }>,
@@ -260,5 +302,11 @@ export async function buildWalletContext(services: OikosServices): Promise<Walle
     recentAudit: audit as Array<{ type: string; status?: string; timestamp?: string }>,
     identity: services.identity,
     swarmPeers: swarmState?.boardPeers?.length ?? 0,
+    swarmAnnouncements: (swarmState?.announcements ?? []).map(a => ({
+      id: a.id, title: a.title, category: a.category, agentName: a.agentName, priceRange: a.priceRange,
+    })),
+    swarmRooms: (swarmState?.rooms ?? []).map(r => ({
+      announcementId: r.announcementId, status: r.status, bids: r.bids?.length ?? 0,
+    })),
   };
 }
