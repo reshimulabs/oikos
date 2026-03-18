@@ -166,6 +166,20 @@ const TOOLS = [
             required: ['announcementId'],
         },
     },
+    {
+        name: 'swarm_deliver_result',
+        description: 'Deliver task result or file content to a room after bid acceptance. Used by sellers to deliver strategy files, reports, or service output. Content is sent inline via the encrypted room channel.',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                announcementId: { type: 'string', description: 'The announcement ID to deliver results for' },
+                result: { type: 'string', description: 'The result content (text, markdown, or base64-encoded file)' },
+                filename: { type: 'string', description: 'Optional filename hint (e.g. "yield-strategy-v2.md")' },
+                contentType: { type: 'string', description: 'MIME type (default: text/markdown)' },
+            },
+            required: ['announcementId', 'result'],
+        },
+    },
     // ── Room Negotiation Tools ──
     {
         name: 'swarm_bid',
@@ -404,6 +418,20 @@ const handlers = {
         if (!removed)
             return { removed: false, reason: 'Announcement not found or not owned by you' };
         return { removed: true, announcementId: params['announcementId'] };
+    },
+    async swarm_deliver_result(params, svc) {
+        if (!svc.swarm)
+            return { error: 'Swarm not enabled' };
+        if (!svc.swarm.deliverTaskResult)
+            return { error: 'Delivery not supported' };
+        const delivered = svc.swarm.deliverTaskResult(params['announcementId'], params['result'], {
+            filename: params['filename'],
+            contentType: params['contentType'] || 'text/markdown',
+            deliveryMethod: 'inline',
+        });
+        if (!delivered)
+            return { delivered: false, reason: 'Room not found or not in accepted state' };
+        return { delivered: true, announcementId: params['announcementId'], filename: params['filename'] || null };
     },
     // ── Room Negotiation Handlers ──
     async swarm_bid(params, svc) {

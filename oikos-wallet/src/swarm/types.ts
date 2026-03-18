@@ -189,6 +189,23 @@ export interface RoomTaskResult {
   announcementId: string;
   fromPubkey: string;
   result: string;
+  /** For file delivery: 'inline' = content in result field, 'url' = external link */
+  deliveryMethod?: 'inline' | 'url';
+  /** Content hash (SHA-256) for verification */
+  contentHash?: string;
+  /** MIME type or format hint (e.g. 'text/markdown', 'application/json') */
+  contentType?: string;
+  /** Filename hint (e.g. 'yield-strategy-v2.md') */
+  filename?: string;
+  timestamp: number;
+}
+
+export interface RoomDeliveryAck {
+  type: 'delivery_ack';
+  announcementId: string;
+  fromPubkey: string;
+  accepted: boolean;
+  reason?: string;
   timestamp: number;
 }
 
@@ -219,6 +236,7 @@ export type RoomMessage =
   | RoomAccept
   | RoomReject
   | RoomTaskResult
+  | RoomDeliveryAck
   | RoomPaymentRequest
   | RoomPaymentConfirm;
 
@@ -313,6 +331,15 @@ export interface ActiveRoom {
   /** Chain for payment settlement */
   paymentChain?: string;
   paymentTxHash?: string;
+  /** Delivered content (file, result, strategy) from task execution */
+  taskResult?: {
+    result: string;
+    contentHash?: string;
+    contentType?: string;
+    filename?: string;
+    deliveryMethod?: string;
+    receivedAt: number;
+  };
   createdAt: number;
 }
 
@@ -360,6 +387,13 @@ export interface SwarmCoordinatorInterface {
   acceptBestBid(announcementId: string): Promise<RoomAccept | undefined>;
   submitPayment(announcementId: string): Promise<void>;
   confirmPayment(announcementId: string, txHash: string): void;
+  /** Deliver task result / file content to room after acceptance (seller side) */
+  deliverTaskResult?(announcementId: string, result: string, opts?: {
+    contentHash?: string;
+    contentType?: string;
+    filename?: string;
+    deliveryMethod?: 'inline' | 'url';
+  }): boolean;
   /** Cancel a negotiation room (creator only). Room closes without settlement. */
   cancelRoom?(announcementId: string): boolean;
   /** Explicitly connect to a peer by Noise public key (bypasses topic discovery) */

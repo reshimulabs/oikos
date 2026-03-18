@@ -29,6 +29,12 @@ export interface SwarmInterface {
     submitPayment(announcementId: string): Promise<void>;
     cancelRoom?(announcementId: string): boolean;
     removeAnnouncement?(announcementId: string): boolean;
+    deliverTaskResult?(announcementId: string, result: string, opts?: {
+        contentHash?: string;
+        contentType?: string;
+        filename?: string;
+        deliveryMethod?: 'inline' | 'url';
+    }): boolean;
 }
 /** ERC-8004 identity state */
 export interface IdentityState {

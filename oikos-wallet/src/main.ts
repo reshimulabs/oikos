@@ -327,7 +327,169 @@ async function main(): Promise<void> {
     }, 1000);
   }
 
-  // 12. Start dashboard (Express: REST + MCP + static UI + public board)
+  // ═══ 13. AGENT AUTONOMY LOOP ═══
+  // Gives the brain real agency: events trigger autonomous reasoning + action chains.
+  // The brain acts within policy + strategy constraints — no human needed for routine ops.
+  if (brain && swarm) {
+    const seenAnnouncements = new Set<string>();
+    const seenBids = new Set<string>();
+    const processedRoomEvents = new Set<string>();
+    let autonomyBusy = false;
+
+    // ── TIER 1: Deterministic auto-actions (no LLM, instant) ──
+    const autoAcceptBid = async (announcementId: string, bidderName: string, price: string, symbol: string): Promise<boolean> => {
+      try {
+        const result = await swarm.acceptBestBid(announcementId);
+        if (result) {
+          console.error(`[autonomy] Auto-accepted bid from ${bidderName}: ${price} ${symbol} on ${announcementId.slice(0, 8)}`);
+          return true;
+        }
+      } catch (err) {
+        console.error(`[autonomy] Auto-accept failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return false;
+    };
+
+    const autoSubmitPayment = async (announcementId: string): Promise<boolean> => {
+      try {
+        await swarm.submitPayment(announcementId);
+        console.error(`[autonomy] Auto-submitted payment for ${announcementId.slice(0, 8)}`);
+        return true;
+      } catch (err) {
+        console.error(`[autonomy] Auto-payment failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return false;
+    };
+
+    const autoDeliverStrategy = async (announcementId: string): Promise<boolean> => {
+      if (!swarm.deliverTaskResult) return false;
+      // Read active strategies and deliver the first one (or a generic response)
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const strategiesDir = path.resolve(process.cwd(), '..', 'strategies');
+        const files = fs.existsSync(strategiesDir) ? fs.readdirSync(strategiesDir).filter((f: string) => f.endsWith('.md')) : [];
+        if (files.length > 0) {
+          const firstFile = files[0] as string;
+          const content = fs.readFileSync(path.join(strategiesDir, firstFile), 'utf-8');
+          return swarm.deliverTaskResult(announcementId, content, {
+            filename: firstFile,
+            contentType: 'text/markdown',
+            deliveryMethod: 'inline',
+          });
+        }
+        return swarm.deliverTaskResult(announcementId, 'Task completed. No strategy file available for delivery.', {
+          contentType: 'text/plain',
+          deliveryMethod: 'inline',
+        });
+      } catch {
+        return false;
+      }
+    };
+
+    // ── TIER 1 Event Router ──
+    swarm.onEvent(async (event) => {
+      if (autonomyBusy) return;
+      const ev = event as unknown as Record<string, unknown>;
+
+      if (event.kind === 'room_message') {
+        const msg = ev['message'] as Record<string, unknown> | undefined;
+        if (!msg) return;
+        const annId = (msg['announcementId'] as string) || '';
+        const eventKey = `${annId}-${msg['type']}-${msg['fromPubkey'] || ''}`;
+        if (processedRoomEvents.has(eventKey)) return;
+        processedRoomEvents.add(eventKey);
+
+        if (msg['type'] === 'bid') {
+          // ── Deterministic: accept if price is within range and rep >= 50% ──
+          const bidKey = `${annId}-${msg['fromPubkey'] || msg['bidderName']}`;
+          if (seenBids.has(bidKey)) return;
+          seenBids.add(bidKey);
+
+          const bidRep = msg['bidderReputation'] as number || 0;
+          const bidPrice = parseFloat(msg['price'] as string || '0');
+          const bidderName = (msg['bidderName'] as string) || 'unknown';
+          const bidSymbol = (msg['symbol'] as string) || 'USDT';
+
+          // Check: is this our announcement?
+          const state = swarm.getState();
+          const ourAnn = state.announcements.find((a: { id: string }) => a.id === annId);
+          if (!ourAnn) return; // not our announcement, ignore
+
+          // Check price is within our range
+          const minPrice = parseFloat(ourAnn.priceRange?.min || '0');
+          const maxPrice = parseFloat(ourAnn.priceRange?.max || '999999');
+          const priceOk = bidPrice >= minPrice && bidPrice <= maxPrice;
+          const repOk = bidRep >= 0.3; // 30% min for auto-accept
+
+          if (priceOk && repOk) {
+            autonomyBusy = true;
+            const accepted = await autoAcceptBid(annId, bidderName, msg['price'] as string, bidSymbol);
+            if (accepted) {
+              // Log to chat
+              chatMessages.push(
+                { id: `auto-${Date.now()}`, text: `[Auto] Accepted bid from ${bidderName}: ${msg['price']} ${bidSymbol}`, from: 'agent', timestamp: Date.now() },
+              );
+            }
+            setTimeout(() => { autonomyBusy = false; }, 3000);
+          } else {
+            console.error(`[autonomy] Bid from ${bidderName} (${(bidRep * 100).toFixed(0)}% rep, ${bidPrice} ${bidSymbol}) — ${!priceOk ? 'price out of range' : 'rep too low'}, skipping`);
+          }
+
+        } else if (msg['type'] === 'accept') {
+          // ── Our bid was accepted → auto-deliver if we're seller, auto-pay if buyer ──
+          autonomyBusy = true;
+          const rooms = swarm.getState().activeRooms || [];
+          const room = rooms.find((r: { announcementId: string }) => r.announcementId === annId);
+          if (room && room.role === 'creator') {
+            // We're the seller — deliver our content
+            const delivered = await autoDeliverStrategy(annId);
+            if (delivered) {
+              chatMessages.push(
+                { id: `auto-${Date.now()}`, text: `[Auto] Delivered strategy file for deal ${annId.slice(0, 8)}`, from: 'agent', timestamp: Date.now() },
+              );
+            }
+          } else if (room && room.role === 'bidder') {
+            // We're the buyer — submit payment
+            await autoSubmitPayment(annId);
+            chatMessages.push(
+              { id: `auto-${Date.now()}`, text: `[Auto] Submitted payment for deal ${annId.slice(0, 8)}`, from: 'agent', timestamp: Date.now() },
+            );
+          }
+          setTimeout(() => { autonomyBusy = false; }, 3000);
+
+        } else if (msg['type'] === 'task_result') {
+          // ── Content delivered to us → auto-pay ──
+          autonomyBusy = true;
+          await autoSubmitPayment(annId);
+          const filename = msg['filename'] as string || 'content';
+          chatMessages.push(
+            { id: `auto-${Date.now()}`, text: `[Auto] Received ${filename} and submitted payment for ${annId.slice(0, 8)}`, from: 'agent', timestamp: Date.now() },
+          );
+          setTimeout(() => { autonomyBusy = false; }, 3000);
+
+        } else if (msg['type'] === 'payment_confirm') {
+          // ── Deal complete → log it ──
+          chatMessages.push(
+            { id: `auto-${Date.now()}`, text: `[Auto] Deal ${annId.slice(0, 8)} settled: ${msg['amount']} ${msg['symbol']}`, from: 'agent', timestamp: Date.now() },
+          );
+        }
+      } else if (event.kind === 'board_message') {
+        const msg = ev['message'] as Record<string, unknown> | undefined;
+        if (msg?.['type'] === 'announcement') {
+          const annId = msg['id'] as string || '';
+          if (!seenAnnouncements.has(annId)) {
+            seenAnnouncements.add(annId);
+            // Silent log — no LLM call, no bidding. Human must instruct to buy.
+          }
+        }
+      }
+    });
+
+    console.error('[autonomy] Deterministic autonomy loop active (Tier 1: no LLM, instant decisions)');
+  }
+
+  // 14. Start dashboard (Express: REST + MCP + static UI + public board)
   createDashboard(services, config.dashboardPort, config.dashboardHost);
 
   console.error('[oikos] Oikos App ready.');

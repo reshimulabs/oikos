@@ -169,6 +169,46 @@ export class SwarmCoordinator {
         console.error(`[swarm] Removed announcement: ${announcementId.slice(0, 8)}`);
         return true;
     }
+    /** Deliver task result or file content to a room */
+    deliverTaskResult(announcementId, result, opts) {
+        if (!this.identity)
+            return false;
+        const room = this.marketplace.getRooms().find((r) => r.announcementId === announcementId);
+        if (!room)
+            return false;
+        room.taskResult = {
+            result,
+            contentHash: opts?.contentHash,
+            contentType: opts?.contentType || 'text/markdown',
+            filename: opts?.filename,
+            deliveryMethod: opts?.deliveryMethod || 'inline',
+            receivedAt: Date.now(),
+        };
+        room.status = 'executing';
+        const msg = {
+            type: 'task_result',
+            announcementId,
+            fromPubkey: this.identity.pubkey,
+            result,
+            deliveryMethod: opts?.deliveryMethod || 'inline',
+            contentHash: opts?.contentHash,
+            contentType: opts?.contentType || 'text/markdown',
+            filename: opts?.filename,
+            timestamp: Date.now(),
+        };
+        // Broadcast to room channel
+        if (this.channels) {
+            this.channels.broadcastRoom(announcementId, msg);
+        }
+        this._emit({
+            kind: 'room_message',
+            roomId: announcementId,
+            message: msg,
+            fromPubkey: this.identity.pubkey,
+        });
+        console.error(`[swarm] Delivered task result for ${announcementId.slice(0, 8)}${opts?.filename ? ` (${opts.filename})` : ''}`);
+        return true;
+    }
     /** Bid on a peer's announcement */
     async bidOnAnnouncement(announcementId, price, symbol, reason) {
         if (!this.identity || !this.channels || !this.discovery || !this.keypair) {

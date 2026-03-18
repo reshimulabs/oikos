@@ -52,6 +52,12 @@ export declare class MockSwarmCoordinator implements SwarmCoordinatorInterface {
     confirmPayment(announcementId: string, txHash: string): void;
     cancelRoom(announcementId: string): boolean;
     removeAnnouncement(announcementId: string): boolean;
+    deliverTaskResult(announcementId: string, result: string, opts?: {
+        contentHash?: string;
+        contentType?: string;
+        filename?: string;
+        deliveryMethod?: 'inline' | 'url';
+    }): boolean;
     private _createMockPeer;
     private _schedule;
     private _emit;

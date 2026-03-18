@@ -55,6 +55,13 @@ export declare class SwarmCoordinator implements SwarmCoordinatorInterface {
     }): string;
     /** Remove own announcement from the board. Only the creator can remove. */
     removeAnnouncement(announcementId: string): boolean;
+    /** Deliver task result or file content to a room */
+    deliverTaskResult(announcementId: string, result: string, opts?: {
+        contentHash?: string;
+        contentType?: string;
+        filename?: string;
+        deliveryMethod?: 'inline' | 'url';
+    }): boolean;
     /** Bid on a peer's announcement */
     bidOnAnnouncement(announcementId: string, price: string, symbol: string, reason: string): Promise<void>;
     /** Accept the best bid in a room I created */
