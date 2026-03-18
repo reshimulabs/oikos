@@ -224,6 +224,16 @@ export class CompanionCoordinator {
             this.send(policyMsg);
         }
         catch { /* wallet may not be ready */ }
+        // Price update (from pricing service)
+        if (this.stateProvider.getPrices) {
+            try {
+                const prices = await this.stateProvider.getPrices();
+                if (prices.length > 0) {
+                    this.send({ type: 'price_update', prices, timestamp: Date.now() });
+                }
+            }
+            catch { /* pricing may not be ready */ }
+        }
         // Swarm status (with full data for UI rendering)
         if (this.swarm) {
             const swarmState = this.swarm.getState();

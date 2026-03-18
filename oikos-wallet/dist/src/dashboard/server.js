@@ -20,6 +20,7 @@
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
 import { mountMCP, mountRemoteMCP } from '../mcp/server.js';
 import { buildWalletContext } from '../brain/adapter.js';
 import { processActions } from '../brain/actions.js';
@@ -128,14 +129,164 @@ export function createDashboard(services, port, host = '127.0.0.1') {
             res.status(500).json({ error: 'Failed to query addresses' });
         }
     });
-    /** Policy status */
+    /** Policy status — merge runtime state with config rules */
     app.get('/api/policies', async (_req, res) => {
         try {
             const policies = await wallet.queryPolicy();
+            // Enrich with rules from config file (runtime state doesn't include rules)
+            const configPaths = [
+                join(process.cwd(), 'policies.json'),
+                join(process.cwd(), '..', 'policies.json'),
+            ];
+            for (const cp of configPaths) {
+                if (existsSync(cp)) {
+                    try {
+                        const config = JSON.parse(readFileSync(cp, 'utf-8'));
+                        if (config.policies) {
+                            // Merge rules from config into runtime policy state
+                            for (const runtimePol of policies) {
+                                const rp = runtimePol;
+                                const configPol = config.policies.find((c) => c.id === rp['id']);
+                                if (configPol && configPol.rules && !rp['rules']) {
+                                    rp['rules'] = configPol.rules;
+                                    if (configPol.name)
+                                        rp['name'] = configPol.name;
+                                }
+                            }
+                            // If no match by ID, just merge first policy's rules
+                            if (policies.length > 0 && !policies[0]['rules'] && config.policies[0]?.rules) {
+                                policies[0]['rules'] = config.policies[0].rules;
+                            }
+                        }
+                    }
+                    catch { /* ignore parse errors */ }
+                    break;
+                }
+            }
             res.json({ policies });
         }
         catch {
             res.status(500).json({ error: 'Failed to query policies' });
+        }
+    });
+    /** Update policy rules and restart wallet isolate */
+    app.post('/api/policies', async (req, res) => {
+        try {
+            const { rules, name } = req.body;
+            if (!rules || !Array.isArray(rules)) {
+                res.status(400).json({ error: 'rules array required' });
+                return;
+            }
+            // Find and update the policy config file
+            const configPaths = [
+                join(process.cwd(), 'policies.json'),
+                join(process.cwd(), '..', 'policies.json'),
+            ];
+            let configPath = configPaths.find(p => existsSync(p));
+            if (!configPath)
+                configPath = configPaths[0];
+            const config = existsSync(configPath)
+                ? JSON.parse(readFileSync(configPath, 'utf-8'))
+                : { policies: [{ id: 'default', name: 'Default Policy', rules: [] }] };
+            // Update first policy's rules
+            if (config.policies && config.policies[0]) {
+                config.policies[0].rules = rules;
+                if (name)
+                    config.policies[0].name = name;
+            }
+            writeFileSync(configPath, JSON.stringify(config, null, 2));
+            console.error(`[policy] Updated policy config: ${rules.length} rules`);
+            // Restart wallet isolate if possible
+            if (typeof services.wallet['restart'] === 'function') {
+                await services.wallet.restart();
+                console.error('[policy] Wallet isolate restarted with new policy');
+            }
+            res.json({ success: true, rules: rules.length, message: 'Policy updated. Wallet restart required for enforcement.' });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            res.status(500).json({ error: msg });
+        }
+    });
+    /** Get strategy skill files */
+    app.get('/api/strategies', (_req, res) => {
+        try {
+            // Resolve from script location (not CWD) for reliable path resolution
+            const scriptDir = dirname(fileURLToPath(import.meta.url));
+            const repoRoot = join(scriptDir, '..', '..', '..');
+            const strategiesDirs = [
+                join(repoRoot, 'strategies'),
+                join(process.cwd(), 'strategies'),
+                join(process.cwd(), '..', 'strategies'),
+            ];
+            // Also include the policy-engine skills as read-only module info
+            const skillsDirCandidates = [
+                join(repoRoot, 'skills', 'policy-engine'),
+                join(process.cwd(), '..', 'skills', 'policy-engine'),
+                join(process.cwd(), 'skills', 'policy-engine'),
+            ];
+            const skillsDir = skillsDirCandidates.find(d => existsSync(d)) ?? skillsDirCandidates[0];
+            const strategies = [];
+            // Load user strategies
+            for (const dir of strategiesDirs) {
+                if (!existsSync(dir))
+                    continue;
+                const files = readdirSync(dir).filter(f => f.endsWith('.md'));
+                for (const file of files) {
+                    const content = readFileSync(join(dir, file), 'utf-8');
+                    const nameMatch = content.match(/^#\s+(.+)$/m);
+                    const enabledMatch = content.match(/enabled:\s*(true|false)/i);
+                    strategies.push({
+                        id: file.replace('.md', ''),
+                        name: nameMatch && nameMatch[1] ? nameMatch[1] : file.replace('.md', ''),
+                        filename: file,
+                        source: content.includes('[Purchased]') ? 'purchased' : content.includes('[Agent]') ? 'agent' : 'human',
+                        enabled: enabledMatch && enabledMatch[1] ? enabledMatch[1] === 'true' : true,
+                        content,
+                        createdAt: '',
+                    });
+                }
+            }
+            // Load policy engine modules as reference
+            const modules = [];
+            if (existsSync(skillsDir)) {
+                const files = readdirSync(skillsDir).filter(f => f.endsWith('.md') && f !== 'SKILL.md');
+                for (const file of files) {
+                    const content = readFileSync(join(skillsDir, file), 'utf-8');
+                    const nameMatch = content.match(/^#\s+(.+)$/m);
+                    modules.push({
+                        id: file.replace('.md', ''),
+                        name: nameMatch && nameMatch[1] ? nameMatch[1] : file,
+                        filename: file,
+                    });
+                }
+            }
+            res.json({ strategies, modules });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            res.status(500).json({ error: msg });
+        }
+    });
+    /** Save a strategy skill file */
+    app.post('/api/strategies', (req, res) => {
+        try {
+            const { filename, content } = req.body;
+            if (!filename || !content) {
+                res.status(400).json({ error: 'filename and content required' });
+                return;
+            }
+            const strategiesDir = join(process.cwd(), '..', 'strategies');
+            if (!existsSync(strategiesDir))
+                mkdirSync(strategiesDir, { recursive: true });
+            const safeName = filename.replace(/[^a-zA-Z0-9_-]/g, '') + '.md';
+            writeFileSync(join(strategiesDir, safeName), content);
+            console.error(`[strategies] Saved strategy: ${safeName}`);
+            res.json({ success: true, filename: safeName });
+        }
+        catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            res.status(500).json({ error: msg });
         }
     });
     /** Audit log entries */
@@ -482,14 +633,30 @@ export function createDashboard(services, port, host = '127.0.0.1') {
             const rawReply = await services.brain.chat(message, context, services.chatMessages);
             // Parse and execute any ACTION: lines in the brain's reply.
             // This bridges brain text output → MCP tool execution → real results.
-            const { reply, results } = await processActions(rawReply, services);
+            const { reply: actionReply, results } = await processActions(rawReply, services);
             if (results.length > 0) {
                 console.error(`[chat] Executed ${results.length} action(s): ${results.map(r => `${r.tool}:${r.success ? 'ok' : 'fail'}`).join(', ')}`);
             }
-            // Store agent reply (enriched with action results)
+            // If actions were executed, feed the results back to the LLM for a human-friendly response
+            let finalReply = actionReply;
+            if (results.length > 0) {
+                try {
+                    const interpretPrompt = `The user asked: "${message}"\n\nResult:\n${actionReply}\n\nRespond naturally to the user about this result. RULES: Never mention tool names, ACTION format, or JSON. Never say "tool was executed". Just answer the user's question using the data. Be concise. Do not output any ACTION.`;
+                    const interpretedReply = await services.brain.chat(interpretPrompt, context, services.chatMessages);
+                    // Only use the interpreted reply if it doesn't contain another ACTION
+                    if (interpretedReply && !interpretedReply.includes('ACTION:')) {
+                        finalReply = interpretedReply;
+                    }
+                }
+                catch {
+                    // If interpretation fails, fall back to the raw action reply
+                    console.error('[chat] Failed to interpret action result, using raw reply');
+                }
+            }
+            // Store agent reply (human-friendly interpretation of action results)
             const agentMsg = {
                 id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                text: reply,
+                text: finalReply,
                 from: 'agent',
                 timestamp: Date.now(),
             };
@@ -498,9 +665,9 @@ export function createDashboard(services, port, host = '127.0.0.1') {
             if (services.chatMessages.length > 100) {
                 services.chatMessages.splice(0, services.chatMessages.length - 100);
             }
-            console.error(`[chat] agent (${services.brain.name}): "${reply.slice(0, 80)}"`);
+            console.error(`[chat] agent (${services.brain.name}): "${finalReply.slice(0, 80)}"`);
             res.json({
-                reply,
+                reply: finalReply,
                 from: 'agent',
                 brainName: services.brain.name,
                 messageId: agentMsg.id,

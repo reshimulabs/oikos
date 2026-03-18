@@ -18,6 +18,12 @@ import type { AgentToCompanionMessage } from './types.js';
 export interface CompanionStateProvider {
     getBalances(): Promise<BalanceResponse[]>;
     getPolicies(): Promise<PolicyStatus[]>;
+    getPrices?(): Promise<Array<{
+        symbol: string;
+        priceUsd: number;
+        source: string;
+        updatedAt: number;
+    }>>;
 }
 export interface CompanionConfig {
     /** Ed25519 public key of the authorized owner (hex) */

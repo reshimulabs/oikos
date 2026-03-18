@@ -178,6 +178,7 @@ async function main(): Promise<void> {
     const stateProvider: CompanionStateProvider = {
       getBalances: () => wallet.queryBalanceAll(),
       getPolicies: () => wallet.queryPolicy(),
+      getPrices: () => pricing.getAllPrices(),
     };
 
     companion = new CC(wallet, stateProvider, {
@@ -276,9 +277,23 @@ async function main(): Promise<void> {
         const rawReply = await brain.chat(text, context, chatMessages);
 
         // Parse and execute any ACTION: lines in the brain's reply
-        const { reply, results } = await processActions(rawReply, services);
+        const { reply: actionReply, results } = await processActions(rawReply, services);
         if (results.length > 0) {
           console.error(`[companion] Executed ${results.length} action(s): ${results.map(r => `${r.tool}:${r.success ? 'ok' : 'fail'}`).join(', ')}`);
+        }
+
+        // If actions were executed, feed results back to LLM for human-friendly interpretation
+        let finalReply = actionReply;
+        if (results.length > 0) {
+          try {
+            const interpretPrompt = `The user asked: "${text}"\n\nResult:\n${actionReply}\n\nRespond naturally to the user about this result. RULES: Never mention tool names, ACTION format, or JSON. Never say "tool was executed". Just answer the user's question using the data. Be concise. Do not output any ACTION.`;
+            const interpreted = await brain.chat(interpretPrompt, context, chatMessages);
+            if (interpreted && !interpreted.includes('ACTION:')) {
+              finalReply = interpreted;
+            }
+          } catch {
+            console.error('[companion] Failed to interpret action result, using raw reply');
+          }
         }
 
         // Store both messages in history
@@ -290,14 +305,14 @@ async function main(): Promise<void> {
         };
         const agentMsg: ChatMessage = {
           id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          text: reply,
+          text: finalReply,
           from: 'agent',
           timestamp: Date.now(),
         };
         chatMessages.push(humanMsg, agentMsg);
         if (chatMessages.length > 100) chatMessages.splice(0, chatMessages.length - 100);
 
-        return { reply, brainName: brain.name };
+        return { reply: finalReply, brainName: brain.name };
       } catch (err) {
         console.error(`[oikos] Chat error: ${err instanceof Error ? err.message : String(err)}`);
         return null;

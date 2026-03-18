@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Oikos App</title>
-  <!-- Font: system monospace fallback (no external requests in Pear Runtime) -->
   <style>
     :root {
       --bg: #f5f2ec;
@@ -33,54 +32,35 @@
       --chat-approval: #f8c4c4;
       --brand-yellow: #ebb743;
       --brand-black: #1a1a1a;
-      --chat-w: 380px;
+      --chat-w: 400px;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: 'JetBrains Mono', 'IBM Plex Mono', 'Fira Code', 'Consolas', monospace;
-      background: var(--bg);
-      color: var(--text);
-      height: 100vh;
-      overflow: hidden;
-      line-height: 1.5;
-      font-size: 13px;
+      background: var(--bg); color: var(--text);
+      height: 100vh; overflow: hidden; line-height: 1.5; font-size: 13px;
     }
 
-    /* ═══ TITLEBAR (macOS) ═══ */
+    /* ═══ TITLEBAR (empty drag area for macOS traffic lights) ═══ */
     .titlebar {
       -webkit-app-region: drag;
-      height: 38px;
-      background: var(--bg2);
-      border-bottom: 2px solid var(--brand-black);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 1rem 0 80px;
-      flex-shrink: 0;
-      z-index: 100;
-    }
-    .titlebar-title { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-    .titlebar-right {
-      -webkit-app-region: no-drag;
-      display: flex; align-items: center; gap: 0.75rem;
+      height: 32px; background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0; z-index: 100;
     }
 
-    /* ═══ TOPBAR ═══ */
+    /* ═══ TOPBAR (tabs + logo) ═══ */
     .topbar {
-      height: 48px;
-      background: var(--bg2);
+      height: 54px; background: var(--bg2);
       border-bottom: 2px solid var(--brand-black);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-shrink: 0;
+      display: flex; align-items: center; flex-shrink: 0;
     }
     .topbar-nav { display: flex; align-items: center; height: 100%; flex: 1; }
     .nav-item {
       flex: 1; height: 100%; display: flex; align-items: center; justify-content: center;
-      font-size: 13px; font-weight: 600; color: var(--muted);
+      font-size: 14px; font-weight: 600; color: var(--muted);
       cursor: pointer; border-right: 1px solid var(--border);
-      text-transform: capitalize; letter-spacing: 0.02em;
+      letter-spacing: 0.02em;
       transition: background 0.1s, color 0.1s; user-select: none;
     }
     .nav-item:hover { background: var(--card); color: var(--text); }
@@ -88,63 +68,103 @@
       background: var(--bg); color: var(--text); font-weight: 800;
       border-bottom: 3px solid var(--brand-yellow); margin-bottom: -2px;
     }
-    .status-row {
-      display: flex; align-items: center; gap: 0.75rem;
-      padding: 0 1rem; font-size: 10px; color: var(--dim);
-    }
-    .status-item { display: flex; align-items: center; gap: 0.3rem; }
-    .status-dot { width: 7px; height: 7px; display: inline-block; }
-    .status-dot.on { background: var(--green); }
-    .status-dot.off { background: var(--red); }
-    .topbar-logo { display: flex; align-items: center; height: 100%; margin-left: auto; width: var(--chat-w); flex-shrink: 0; }
+    .topbar-logo { display: flex; align-items: stretch; height: 100%; width: var(--chat-w); flex-shrink: 0; }
     .logo-block {
-      background: var(--brand-yellow); height: 100%; width: 100%;
+      background: var(--brand-yellow); width: 100%;
       display: flex; align-items: center; justify-content: center;
       border-left: 2px solid var(--brand-black);
     }
-    .logo-block svg {
-      height: 42px;
-      width: auto;
-      color: #1a1a1a;
+    .logo-block svg { height: 44px; width: auto; color: #1a1a1a; }
+    .chat-status-bar {
+      display: flex; align-items: center; justify-content: space-around;
+      padding: 0.3rem 0; font-size: 10px;
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
     }
+    .cs-item { display: flex; align-items: center; gap: 0.25rem; color: var(--dim); }
+    .cs-dot { width: 6px; height: 6px; display: inline-block; }
+    .cs-dot.on { background: var(--green); }
+    .cs-dot.off { background: var(--red); }
 
     /* ═══ LAYOUT ═══ */
-    .layout { display: flex; height: calc(100vh - 38px - 48px); }
+    .layout { display: flex; height: calc(100vh - 32px - 54px); }
 
     /* ═══ CONTENT ═══ */
     .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
     .content-scroll { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem 0.5rem; }
 
-    /* ═══ REASONING TICKER ═══ */
-    .reasoning-strip {
+    /* ═══ BOTTOM BAR ═══ */
+    .bottom-bar {
       flex-shrink: 0; background: var(--bg2);
       border-top: 2px solid var(--brand-black);
-      padding: 0.5rem 1.25rem; display: flex; align-items: flex-start;
-      gap: 0.75rem; min-height: 52px; max-height: 80px; overflow: hidden;
+      padding: 0.4rem 1.25rem; display: flex; align-items: center;
+      justify-content: space-between; min-height: 36px;
     }
-    .reasoning-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--dim); white-space: nowrap; padding-top: 2px; }
-    .reasoning-time { font-size: 10px; color: var(--dim); display: block; margin-top: 1px; }
-    .reasoning-text { font-size: 12px; color: var(--muted); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; }
+    .bb-left a { display: flex; align-items: center; text-decoration: none; color: var(--dim); gap: 0.4rem; }
+    .bb-left a:hover { color: var(--muted); }
+    .bb-left svg { height: 22px; width: auto; }
+    .bb-left span { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; }
+    .bb-center { font-size: 11px; color: var(--dim); font-weight: 600; }
+    .bb-right button {
+      background: none; border: none; font-size: 16px; cursor: pointer;
+      color: var(--muted); font-family: inherit; padding: 2px 6px;
+    }
+    .bb-right button:hover { color: var(--text); }
+
+    /* ═══ STATUS STRIP (Feed) ═══ */
+    .status-strip {
+      display: flex; align-items: center; gap: 1.5rem;
+      padding: 0.6rem 1rem; margin-bottom: 1rem;
+      background: var(--bg2); border: 2px solid var(--brand-black); font-size: 12px;
+    }
+    .ss-item { display: flex; align-items: center; gap: 0.4rem; }
+    .ss-label { color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+    .ss-value { font-weight: 800; }
+
+    /* ═══ FEED ═══ */
+    .feed-controls { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; }
+    .feed-toggle {
+      padding: 0.3rem 0.75rem; font-family: inherit; font-size: 11px;
+      font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+      cursor: pointer; border: 2px solid var(--brand-black);
+      background: var(--card); color: var(--muted); transition: all 0.15s;
+    }
+    .feed-toggle.active { background: var(--brand-yellow); color: var(--brand-black); }
+    .feed-toggle:hover { background: var(--card-hover); }
+    .feed-toggle.active:hover { background: var(--brand-yellow); }
+    .feed-list { list-style: none; }
+    .feed-item {
+      display: flex; gap: 0.6rem; padding: 0.6rem 0.75rem;
+      border-bottom: 1px solid var(--border); transition: background 0.1s; align-items: flex-start;
+    }
+    .feed-item:hover { background: var(--card-hover); }
+    .feed-indicator { width: 4px; min-height: 100%; flex-shrink: 0; align-self: stretch; border-radius: 2px; }
+    .fi-financial { background: var(--gold); } .fi-success { background: var(--green); }
+    .fi-rejected { background: var(--red); } .fi-swarm { background: var(--blue); }
+    .fi-system { background: var(--dim); } .fi-policy { background: var(--purple); }
+    .feed-body { flex: 1; min-width: 0; }
+    .feed-summary { font-size: 12px; font-weight: 600; }
+    .feed-detail { font-size: 11px; color: var(--muted); margin-top: 0.15rem; }
+    .feed-time { font-size: 10px; color: var(--dim); white-space: nowrap; flex-shrink: 0; padding-top: 1px; }
 
     /* ═══ CHAT PANEL ═══ */
     .chat-panel {
       width: var(--chat-w); border-left: 2px solid var(--brand-black);
       display: flex; flex-direction: column; background: var(--card); flex-shrink: 0;
     }
-    .chat-header {
-      background: var(--brand-yellow); padding: 0.5rem 1rem;
-      text-align: center; border-bottom: 2px solid var(--brand-black); flex-shrink: 0;
-    }
-    .chat-title { font-size: 14px; font-weight: 800; color: var(--brand-black); letter-spacing: 0.15em; text-transform: uppercase; }
     .chat-messages { flex: 1; overflow-y: auto; padding: 0.75rem; }
     .chat-msg { margin-bottom: 0.6rem; max-width: 92%; }
     .chat-msg-header { font-size: 10px; font-weight: 600; color: var(--dim); margin-bottom: 2px; display: flex; justify-content: space-between; }
-    .chat-bubble { padding: 0.55rem 0.75rem; font-size: 12px; line-height: 1.5; border: 2px solid var(--brand-black); }
+    .chat-bubble { padding: 0.55rem 0.75rem; font-size: 12px; line-height: 1.6; border: 2px solid var(--brand-black); }
+    .chat-bubble strong { font-weight: 700; }
+    .chat-bubble em { font-style: italic; }
+    .chat-bubble code { background: rgba(0,0,0,0.08); padding: 0.1em 0.3em; font-size: 11px; }
+    .chat-bubble ol, .chat-bubble ul { margin: 0.3rem 0 0.3rem 1.2rem; }
+    .chat-bubble li { margin-bottom: 0.15rem; }
     .chat-msg.agent { margin-right: auto; }
     .chat-msg.agent .chat-bubble { background: var(--chat-agent); }
     .chat-msg.human { margin-left: auto; }
     .chat-msg.human .chat-bubble { background: var(--chat-human); }
-    .chat-msg.approval .chat-bubble { background: var(--chat-approval); border-color: var(--red); }
     .chat-msg.system .chat-bubble { background: var(--bg2); border-color: var(--border); color: var(--muted); font-size: 11px; }
     .chat-input-area { border-top: 2px solid var(--brand-black); flex-shrink: 0; display: flex; flex-direction: column; }
     .chat-input {
@@ -161,18 +181,15 @@
     .chat-send:hover { opacity: 0.85; }
     .chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
-    /* ═══ SHARED STYLES ═══ */
+    /* ═══ SHARED ═══ */
     .view { display: none; }
     .view.active { display: block; }
-    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.6rem; margin-bottom: 1.25rem; }
-    .kpi { background: var(--card); border: 2px solid var(--brand-black); padding: 0.75rem 0.85rem; }
+    .kpi-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
+    .kpi { background: var(--card); border: 2px solid var(--brand-black); padding: 0.55rem 0.7rem; }
     .kpi-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; }
-    .kpi-value { font-size: 1.5rem; font-weight: 800; margin-top: 0.15rem; }
-    .kpi-sub { font-size: 10px; color: var(--dim); margin-top: 0.1rem; }
-    .kpi-value.green { color: var(--green); }
-    .kpi-value.red { color: var(--red); }
-    .kpi-value.blue { color: var(--blue); }
-    .kpi-value.purple { color: var(--purple); }
+    .kpi-value { font-size: 1.2rem; font-weight: 800; margin-top: 0.1rem; }
+    .kpi-value.green { color: var(--green); } .kpi-value.red { color: var(--red); }
+    .kpi-value.blue { color: var(--blue); } .kpi-value.purple { color: var(--purple); }
     .kpi-value.gold { color: var(--gold); }
     .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 0.6rem; margin-bottom: 0.6rem; }
     .col-4 { grid-column: span 4; } .col-5 { grid-column: span 5; } .col-6 { grid-column: span 6; }
@@ -181,10 +198,8 @@
     .card-title { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.1em; font-weight: 700; margin-bottom: 0.65rem; display: flex; justify-content: space-between; align-items: center; }
     .badge { font-size: 10px; padding: 0.1rem 0.4rem; font-weight: 700; border: 1px solid currentColor; text-transform: uppercase; }
     .badge-green { color: var(--green); }
-    .portfolio-total { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.65rem; }
+    .portfolio-total { font-size: 1.8rem; font-weight: 800; margin-bottom: 0.4rem; }
     .portfolio-total .currency { font-size: 0.85rem; color: var(--dim); font-weight: 600; }
-    .alloc-bar { display: flex; height: 10px; overflow: hidden; background: var(--border); margin-bottom: 0.65rem; border: 1px solid var(--brand-black); }
-    .alloc-seg { height: 100%; min-width: 3px; }
     .asset-row { display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 12px; }
     .asset-row:last-child { border-bottom: none; }
     .asset-left { display: flex; align-items: center; gap: 0.5rem; }
@@ -193,82 +208,193 @@
     .asset-right { text-align: right; }
     .asset-amount { font-weight: 700; } .asset-usd { font-size: 11px; color: var(--muted); } .asset-pct { font-size: 10px; color: var(--dim); margin-left: 0.3rem; }
     .c-usdt { background: #2d8a4e; } .c-xaut { background: #b8860b; } .c-usat { background: #2874a6; } .c-btc { background: #d35400; } .c-eth { background: #148f77; }
-
-    .op-list { list-style: none; max-height: 340px; overflow-y: auto; }
-    .op-item { padding: 0.45rem 0.5rem; border-bottom: 1px solid var(--border); font-size: 12px; display: flex; align-items: flex-start; gap: 0.5rem; }
-    .op-item:last-child { border-bottom: none; }
-    .op-indicator { width: 4px; min-height: 100%; flex-shrink: 0; align-self: stretch; }
-    .op-ind-executed { background: var(--green); } .op-ind-rejected { background: var(--red); } .op-ind-failed { background: var(--yellow); }
-    .op-body { flex: 1; }
     .op-badge { display: inline-block; padding: 0.05rem 0.3rem; font-size: 10px; font-weight: 700; text-transform: uppercase; border: 1px solid currentColor; }
     .badge-payment { color: var(--green); } .badge-swap { color: var(--purple); } .badge-bridge { color: var(--blue); } .badge-yield { color: var(--orange); } .badge-feedback { color: var(--cyan); }
-    .op-status { font-weight: 700; margin-left: 0.3rem; }
-    .op-detail { color: var(--muted); font-size: 11px; margin-top: 0.1rem; }
-    .op-hash { color: var(--dim); font-size: 10px; }
-
-    .policy-item { margin-bottom: 0.6rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--border); }
-    .policy-item:last-child { border-bottom: none; }
-    .policy-name { font-size: 13px; font-weight: 700; margin-bottom: 0.25rem; }
-    .policy-rule { font-size: 11px; color: var(--muted); padding: 0.1rem 0; }
-    .budget-bar-bg { height: 6px; background: var(--border); margin-top: 0.2rem; }
-    .budget-bar-fill { height: 100%; }
-
-    .id-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
-    .id-item .id-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
-    .id-item .id-value { font-size: 14px; font-weight: 700; margin-top: 0.1rem; }
-    .id-yes { color: var(--green); } .id-no { color: var(--red); }
-
-    .audit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .audit-table th { text-align: left; font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; padding: 0.5rem; border-bottom: 2px solid var(--brand-black); position: sticky; top: 0; background: var(--card); }
-    .audit-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
-
-    .form-group { margin-bottom: 0.6rem; }
-    .form-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-bottom: 0.25rem; display: block; }
-    .form-input, .form-select { width: 100%; background: #fff; border: 2px solid var(--brand-black); padding: 0.45rem 0.6rem; font-family: inherit; font-size: 12px; color: var(--text); outline: none; }
-    .form-input:focus, .form-select:focus { border-color: var(--blue); }
-    .form-input::placeholder { color: var(--dim); }
-    .btn { display: inline-flex; align-items: center; padding: 0.45rem 0.85rem; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; border: 2px solid var(--brand-black); background: var(--card); color: var(--text); text-transform: uppercase; letter-spacing: 0.05em; }
-    .btn:hover { background: var(--bg); }
-    .btn-primary { background: var(--brand-yellow); }
-    .sim-result { background: var(--bg); border: 2px solid var(--border); padding: 0.5rem 0.6rem; font-size: 11px; white-space: pre-wrap; color: var(--muted); margin-top: 0.4rem; }
 
     .section { margin-top: 1rem; margin-bottom: 0.6rem; display: flex; align-items: center; gap: 0.75rem; }
     .section-title { font-size: 11px; font-weight: 800; color: var(--text); text-transform: uppercase; letter-spacing: 0.12em; white-space: nowrap; }
     .section-line { flex: 1; height: 2px; background: var(--brand-black); }
+    .section-count { font-size: 10px; font-weight: 700; padding: 0.1rem 0.4rem; border: 1px solid var(--brand-black); background: var(--brand-yellow); color: var(--brand-black); }
+
+    /* ═══ WEALTH LAYOUT ═══ */
+    .wealth-top {
+      display: flex; gap: 0.6rem; margin-bottom: 0.6rem;
+      height: calc(60vh - 100px); min-height: 260px;
+    }
+    .wealth-holdings { flex: 6; display: flex; flex-direction: column; overflow: hidden; }
+    .wealth-txns { flex: 4; display: flex; flex-direction: column; overflow: hidden; }
+    .wealth-txns .feed-list { flex: 1; overflow-y: auto; }
+    .wealth-pie-row {
+      display: flex; align-items: center; gap: 1.25rem; flex: 1; min-height: 0;
+    }
+    .wealth-pie-row canvas { flex-shrink: 0; }
+    .wealth-asset-list { flex: 1; overflow-y: auto; min-height: 0; }
+    .wealth-asset-list .asset-row { padding: 0.4rem 0; }
+    .wealth-asset-list .asset-chain { display: block; font-size: 9px; line-height: 1.2; }
+    .wealth-asset-list .asset-right { white-space: nowrap; }
+    .wealth-asset-list .asset-usd, .wealth-asset-list .asset-pct { display: inline; }
+    .wealth-prices { overflow: hidden; }
+    .price-grid {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 0 1.5rem; max-height: calc(35vh - 80px); overflow-y: auto;
+    }
+
+    /* ═══ PRICES ═══ */
+    .price-row { display: flex; justify-content: space-between; align-items: center; padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .price-row:last-child { border-bottom: none; }
+    .price-left { display: flex; align-items: center; gap: 0.5rem; }
+    .price-dot { width: 8px; height: 8px; flex-shrink: 0; }
+    .price-sym { font-weight: 700; }
+    .price-name { font-size: 10px; color: var(--dim); }
+    .price-right { text-align: right; display: flex; align-items: center; gap: 0.5rem; }
+    .price-usd { font-weight: 700; }
+    .price-chg { font-size: 10px; font-weight: 700; }
+    .price-chg.up { color: var(--green); }
+    .price-chg.down { color: var(--red); }
+    .price-src-label { font-size: 10px; color: var(--dim); display: flex; align-items: center; gap: 0.4rem; }
+    .price-src-dot { width: 6px; height: 6px; background: var(--green); display: inline-block; animation: pulse 2s ease infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+    /* ═══ SWARM ═══ */
+    .swarm-strip {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.6rem 1.5rem; margin-bottom: 1rem;
+      background: var(--bg2); border: 2px solid var(--brand-black); font-size: 12px;
+    }
+    .search-box {
+      display: flex; align-items: center; gap: 0.5rem;
+      background: var(--card); border: 2px solid var(--brand-black);
+      padding: 0.5rem 0.75rem; margin-bottom: 0.75rem;
+    }
+    .search-icon { font-size: 14px; color: var(--dim); flex-shrink: 0; }
+    .search-input {
+      width: 100%; background: transparent; border: none; outline: none;
+      font-family: inherit; font-size: 13px; color: var(--text);
+    }
+    .search-input::placeholder { color: var(--dim); }
+    .search-clear {
+      background: none; border: none; cursor: pointer;
+      font-size: 14px; color: var(--dim); padding: 0 4px; display: none;
+    }
+    .search-clear:hover { color: var(--text); }
+    .tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 0.75rem; }
+    .tag-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 0.2rem 0.6rem; background: var(--card);
+      border: 1px solid var(--brand-black); font-size: 11px; font-weight: 600;
+      color: var(--text); cursor: pointer; transition: background 0.15s; text-transform: lowercase;
+    }
+    .tag-pill:hover { background: var(--card-hover); }
+    .tag-pill.active { background: var(--brand-yellow); color: var(--brand-black); }
+    .tag-count { font-size: 9px; color: var(--dim); font-weight: 700; }
+    .tag-pill.active .tag-count { color: var(--brand-black); }
+    .ann-item { padding: 0.5rem 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .ann-item:last-child { border-bottom: none; }
+    .ann-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.25rem; }
+    .ann-title-row { display: flex; align-items: center; gap: 0.5rem; min-width: 0; flex: 1; }
+    .ann-title { font-weight: 700; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ann-id { font-size: 9px; color: var(--dim); padding: 0.05rem 0.3rem; border: 1px solid var(--border); background: var(--bg); white-space: nowrap; flex-shrink: 0; cursor: pointer; }
+    .ann-id:hover { border-color: var(--brand-black); }
+    .ann-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 0.05rem 0.35rem; border: 1px solid currentColor; flex-shrink: 0; }
+    .cat-seller { color: var(--green); } .cat-buyer { color: var(--blue); } .cat-auction { color: var(--gold); }
+    .ann-desc { font-size: 11px; color: var(--muted); margin: 0.2rem 0; line-height: 1.4; }
+    .ann-tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0.25rem 0; }
+    .ann-tag { font-size: 9px; padding: 0.1rem 0.35rem; background: var(--bg); border: 1px solid var(--border); color: var(--muted); cursor: pointer; text-transform: lowercase; }
+    .ann-tag:hover { border-color: var(--brand-black); }
+    .ann-bottom { display: flex; align-items: center; gap: 0.75rem; font-size: 10px; color: var(--dim); margin-top: 0.2rem; }
+    .ann-agent { font-weight: 600; color: var(--muted); }
+    .ann-rep { color: var(--green); font-weight: 700; }
+    .ann-price { color: var(--gold); font-weight: 600; }
 
     .peer-chip { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.2rem 0.5rem; background: var(--bg); border: 1px solid var(--brand-black); font-size: 11px; margin: 0.15rem; }
     .peer-dot { width: 6px; height: 6px; background: var(--green); }
     .peer-rep { color: var(--green); font-weight: 700; font-size: 10px; }
-    .econ-row { display: flex; justify-content: space-between; padding: 0.35rem 0; font-size: 12px; border-bottom: 1px solid var(--border); }
-    .econ-row:last-child { border-bottom: none; }
-    .econ-label { color: var(--muted); }
-    .econ-val { font-weight: 700; }
-    .econ-pos { color: var(--green); } .econ-neg { color: var(--red); }
 
-    /* ═══ SWARM ═══ */
-    .ann-item { padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 12px; }
-    .ann-item:last-child { border-bottom: none; }
-    .ann-cat { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 0.05rem 0.35rem; border: 1px solid currentColor; }
-    .cat-seller { color: var(--green); } .cat-buyer { color: var(--blue); } .cat-auction { color: var(--gold); }
-    .cat-service { color: var(--blue); } .cat-compute { color: var(--purple); } .cat-data { color: var(--cyan); } .cat-defi { color: var(--gold); }
-    .room-item { padding: 0.35rem 0; border-bottom: 1px solid var(--border); font-size: 12px; }
-    .room-item:last-child { border-bottom: none; }
-    .room-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 0.05rem 0.35rem; border: 1px solid currentColor; }
-    .rb-open { color: var(--green); } .rb-negotiating { color: var(--yellow); } .rb-settled { color: var(--blue); }
-    .event-line { padding: 0.2rem 0; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); }
-    .event-line:last-child { border-bottom: none; }
-    .event-time { color: var(--dim); font-size: 10px; }
+    /* ═══ POLICY ═══ */
+    .pol-budget-row { margin-bottom: 0.6rem; }
+    .pol-budget-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.25rem; }
+    .pol-budget-label { font-size: 11px; font-weight: 700; }
+    .pol-budget-nums { font-size: 11px; color: var(--muted); }
+    .pol-budget-nums strong { color: var(--text); }
+    .pol-budget-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .pol-budget-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+    .pol-rules-line { font-size: 11px; color: var(--muted); line-height: 1.8; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+    .pol-rules-line strong { color: var(--text); font-weight: 700; }
+    .pol-rule-sep { color: var(--border); margin: 0 0.4rem; }
 
-    /* ═══ ARCH STRIP ═══ */
-    .arch-strip {
-      display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 1rem;
-      padding-top: 0.75rem; border-top: 1px solid var(--border);
+    .strat-item {
+      background: var(--card); border: 2px solid var(--brand-black); padding: 0.65rem 0.85rem;
+      margin-bottom: 0.5rem;
     }
-    .arch-item {
-      font-size: 10px; color: var(--dim); padding: 0.2rem 0.5rem;
-      border: 1px solid var(--border); background: var(--bg);
+    .strat-header { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .strat-left { display: flex; align-items: center; gap: 0.5rem; }
+    .strat-name { font-size: 13px; font-weight: 700; }
+    .strat-source {
+      font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 0.1rem 0.35rem;
+      border: 1px solid currentColor;
     }
-    .arch-item strong { color: var(--muted); }
+    .strat-src-human { color: var(--green); }
+    .strat-src-purchased { color: var(--blue); }
+    .strat-src-agent { color: var(--purple); }
+    .strat-desc { font-size: 11px; color: var(--muted); margin-top: 0.3rem; line-height: 1.4; }
+    .strat-actions { display: flex; gap: 0.3rem; margin-top: 0.4rem; }
+    .strat-toggle {
+      font-size: 10px; font-weight: 700; padding: 0.2rem 0.5rem; cursor: pointer;
+      border: 1px solid currentColor; background: none; font-family: inherit;
+    }
+    .strat-toggle-on { color: var(--green); }
+    .strat-toggle-off { color: var(--dim); }
+    .strat-pending { border-color: var(--yellow) !important; }
+    .strat-pending .strat-name::before { content: "\u23F8 "; }
+    .strat-approval-btns { display: flex; gap: 0.3rem; margin-top: 0.35rem; }
+    .strat-approve { color: var(--green); background: var(--green-bg); border: 1px solid var(--green); padding: 0.2rem 0.5rem; font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .strat-reject { color: var(--red); background: var(--red-bg); border: 1px solid var(--red); padding: 0.2rem 0.5rem; font-size: 10px; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+    .pol-capabilities {
+      margin-top: 1.25rem; padding-top: 0.75rem; border-top: 1px solid var(--border);
+    }
+    .pol-cap-label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--dim); display: flex; align-items: center; gap: 0.5rem;
+    }
+    .pol-cap-label:hover { color: var(--muted); }
+    #pol-mod-count {
+      font-size: 10px; font-weight: 700; padding: 0.1rem 0.4rem;
+      background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+    }
+    .pol-module-list {
+      display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.5rem;
+    }
+    .pol-mod-tag {
+      font-size: 10px; padding: 0.15rem 0.5rem; background: var(--bg);
+      border: 1px solid var(--border); color: var(--muted);
+    }
+
+    /* ═══ MODALS ═══ */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); z-index: 1000;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modal {
+      background: var(--card); border: 2px solid var(--brand-black);
+      padding: 1.25rem 1.5rem; width: 420px; max-width: 90vw; max-height: 80vh; overflow-y: auto;
+    }
+    .modal-title { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 1rem; display: flex; justify-content: space-between; }
+    .modal-close { cursor: pointer; color: var(--muted); background: none; border: none; font-size: 18px; font-family: inherit; }
+    .form-group { margin-bottom: 0.6rem; }
+    .form-label { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; margin-bottom: 0.25rem; display: block; }
+    .form-input, .form-select { width: 100%; background: #fff; border: 2px solid var(--brand-black); padding: 0.45rem 0.6rem; font-family: inherit; font-size: 12px; color: var(--text); outline: none; }
+    .form-input:focus, .form-select:focus { border-color: var(--blue); }
+    .btn { display: inline-flex; align-items: center; padding: 0.45rem 0.85rem; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; border: 2px solid var(--brand-black); background: var(--card); color: var(--text); text-transform: uppercase; letter-spacing: 0.05em; }
+    .btn:hover { background: var(--bg); }
+    .btn-primary { background: var(--brand-yellow); }
+    .btn-sm { padding: 0.3rem 0.6rem; font-size: 11px; }
+    .sim-result { background: var(--bg); border: 2px solid var(--border); padding: 0.5rem 0.6rem; font-size: 11px; white-space: pre-wrap; color: var(--muted); margin-top: 0.4rem; }
+
+    .audit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .audit-table th { text-align: left; font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; padding: 0.5rem; border-bottom: 2px solid var(--brand-black); position: sticky; top: 0; background: var(--card); }
+    .audit-table td { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 
     .empty { color: var(--dim); font-size: 12px; padding: 0.75rem 0; text-align: center; }
     .hidden { display: none !important; }
@@ -279,44 +405,27 @@
     /* ═══ DARK MODE ═══ */
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #1c1c20;
-        --bg2: #242428;
-        --card: #2a2a2f;
-        --card-hover: #323237;
-        --border: #48484e;
-        --border-light: #3a3a40;
-        --text: #e4e0d8;
-        --muted: #a09a90;
-        --dim: #6e6a62;
-        --green: #4ade80;
-        --green-bg: #1a3a2a;
-        --red: #f87171;
-        --red-bg: #3a1a1a;
-        --yellow: #fbbf24;
-        --yellow-bg: #ebb743;
-        --blue: #60a5fa;
-        --blue-bg: #1a2a4a;
-        --purple: #a78bfa;
-        --orange: #fb923c;
-        --gold: #fbbf24;
-        --cyan: #2dd4bf;
-        --chat-agent: #1e3040;
-        --chat-human: #3a3218;
-        --chat-approval: #3a1e1e;
+        --bg: #1c1c20; --bg2: #242428; --card: #2a2a2f; --card-hover: #323237;
+        --border: #48484e; --border-light: #3a3a40;
+        --text: #e4e0d8; --muted: #a09a90; --dim: #6e6a62;
+        --green: #4ade80; --green-bg: #1a3a2a; --red: #f87171; --red-bg: #3a1a1a;
+        --yellow: #fbbf24; --yellow-bg: #ebb743; --blue: #60a5fa; --blue-bg: #1a2a4a;
+        --purple: #a78bfa; --orange: #fb923c; --gold: #fbbf24; --cyan: #2dd4bf;
+        --chat-agent: #1e3040; --chat-human: #3a3218; --chat-approval: #3a1e1e;
         --brand-black: #6a6a70;
       }
       .chat-input { background: transparent; }
       .form-input, .form-select { background: #1c1c20; color: var(--text); }
-      .chat-msg.system .chat-bubble { background: var(--bg); }
+      .chat-bubble code { background: rgba(255,255,255,0.1); }
       ::-webkit-scrollbar-thumb { background: #48484e; }
     }
 
-    @media (max-width: 1100px) { :root { --chat-w: 300px; } }
+    @media (max-width: 1100px) { :root { --chat-w: 320px; } }
     @media (max-width: 900px) {
-      :root { --chat-w: 260px; }
-      .col-4, .col-5, .col-6, .col-7, .col-8, .col-12 { grid-column: span 12; }
+      :root { --chat-w: 280px; }
+      .col-4,.col-5,.col-6,.col-7,.col-8,.col-12 { grid-column: span 12; }
       .content-scroll { padding: 0.75rem 1rem 0.5rem; }
-      .nav-item { padding: 0 0.7rem; font-size: 11px; }
+      .nav-item { font-size: 12px; }
     }
     @media (max-width: 700px) {
       .layout { flex-direction: column; }
@@ -327,24 +436,15 @@
 </head>
 <body>
 
-<div class="titlebar">
-  <span class="titlebar-title">Oikos App</span>
-  <div class="titlebar-right">
-    <span class="status-item"><span class="status-dot off" id="td-wallet"></span> Wallet</span>
-    <span class="status-item"><span class="status-dot off" id="td-swarm"></span> Swarm</span>
-    <span class="status-item"><span class="status-dot off" id="td-companion"></span> Agent</span>
-    <span id="refresh-ts" style="font-size:10px;color:var(--dim);"></span>
-  </div>
-</div>
+<!-- Empty drag area for macOS traffic light buttons -->
+<div class="titlebar"></div>
 
 <div class="topbar">
   <nav class="topbar-nav">
-    <div class="nav-item active" data-view="overview">Overview</div>
-    <div class="nav-item" data-view="wallet">Wallet</div>
+    <div class="nav-item active" data-view="feed">Feed</div>
+    <div class="nav-item" data-view="wealth">Wealth</div>
     <div class="nav-item" data-view="swarm">Swarm</div>
-    <div class="nav-item" data-view="policies">Policies</div>
-    <div class="nav-item" data-view="audit">Audit Log</div>
-    <div class="nav-item" data-view="settings">Settings</div>
+    <div class="nav-item" data-view="policies">Policy Engine</div>
   </nav>
   <div class="topbar-logo">
     <div class="logo-block">
@@ -366,153 +466,58 @@
   <div class="content">
     <div class="content-scroll" id="content-scroll">
 
-      <!-- ═══════ OVERVIEW ═══════ -->
-      <div class="view active" id="view-overview">
-        <div class="kpi-strip">
-          <div class="kpi">
-            <div class="kpi-label">Portfolio Value</div>
-            <div class="kpi-value green" id="kpi-portfolio">--</div>
-            <div class="kpi-sub" id="kpi-assets">-- assets</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">Events</div>
-            <div class="kpi-value blue" id="kpi-events">0</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">Proposals</div>
-            <div class="kpi-value" id="kpi-proposals">0</div>
-            <div class="kpi-sub" id="kpi-proposal-detail">0 / 0</div>
-          </div>
-          <div class="kpi">
-            <div class="kpi-label">DeFi Ops</div>
-            <div class="kpi-value purple" id="kpi-defi">0</div>
-          </div>
-          <div class="kpi hidden" id="kpi-sus-card">
-            <div class="kpi-label">Sustainability</div>
-            <div class="kpi-value green" id="kpi-sustainability">--</div>
-          </div>
+      <!-- ═══════ FEED ═══════ -->
+      <div class="view active" id="view-feed">
+        <div class="status-strip">
+          <div class="ss-item"><span class="ss-label">Portfolio</span> <span class="ss-value green" id="ss-portfolio">--</span></div>
+          <div class="ss-item"><span class="ss-label">Peers</span> <span class="ss-value blue" id="ss-peers">0</span></div>
+          <div class="ss-item" id="ss-swarm-wrap" class="hidden"><span class="ss-label">Swarm</span> <span class="ss-value" id="ss-swarm-name">--</span></div>
         </div>
-
-        <div class="grid">
-          <div class="card col-5">
-            <div class="card-title">Portfolio</div>
-            <div class="portfolio-total" id="portfolio-total">$0.00 <span class="currency">USD</span></div>
-            <div class="alloc-bar" id="alloc-bar"></div>
-            <div id="asset-list"></div>
-          </div>
-          <div class="card col-7">
-            <div class="card-title">Recent Operations</div>
-            <ul class="op-list" id="op-list">
-              <li class="op-item"><div class="op-body empty">No operations yet</div></li>
-            </ul>
-          </div>
+        <div class="feed-controls">
+          <button class="feed-toggle active" data-mode="activity">Activity</button>
+          <button class="feed-toggle" data-mode="audit">Audit Trail</button>
         </div>
-
-        <div id="swarm-overview" class="hidden">
-          <div class="section">
-            <span class="section-title">Swarm</span>
-            <span class="section-line"></span>
-          </div>
-          <div class="grid">
-            <div class="card col-4">
-              <div class="card-title">Identity</div>
-              <div style="font-size:15px;font-weight:800;" id="swarm-name">--</div>
-              <div style="margin-top:0.3rem;">
-                <span class="kpi-label">Reputation </span>
-                <span style="font-weight:700;color:var(--green);" id="swarm-rep">--</span>
-              </div>
-              <div style="margin-top:0.4rem;" id="swarm-peers"></div>
-            </div>
-            <div class="card col-4">
-              <div class="card-title">Board</div>
-              <div id="ann-list" style="max-height:200px;overflow-y:auto;">
-                <div class="empty">No announcements</div>
-              </div>
-            </div>
-            <div class="card col-4">
-              <div class="card-title">Negotiations</div>
-              <div id="room-list" style="max-height:200px;overflow-y:auto;">
-                <div class="empty">No active rooms</div>
-              </div>
-            </div>
-          </div>
+        <div id="feed-activity">
+          <ul class="feed-list" id="feed-list">
+            <li class="empty" style="padding:2rem;">Waiting for agent activity...</li>
+          </ul>
         </div>
-
-        <div id="identity-overview" class="hidden">
-          <div class="section">
-            <span class="section-title">On-Chain Identity (ERC-8004)</span>
-            <span class="section-line"></span>
-          </div>
-          <div class="grid">
-            <div class="card col-6">
-              <div class="id-grid">
-                <div class="id-item"><div class="id-label">Registered</div><div class="id-value" id="id-registered">--</div></div>
-                <div class="id-item"><div class="id-label">Agent ID</div><div class="id-value" id="id-agent-id">--</div></div>
-                <div class="id-item"><div class="id-label">Wallet Set</div><div class="id-value" id="id-wallet-set">--</div></div>
-                <div class="id-item"><div class="id-label">On-Chain Rep</div><div class="id-value green" id="id-rep">--</div></div>
-              </div>
-            </div>
-            <div class="card col-6">
-              <div class="card-title">Economics</div>
-              <div id="econ-content">
-                <div class="econ-row"><span class="econ-label">Revenue</span><span class="econ-val econ-pos" id="econ-rev">$0.00</span></div>
-                <div class="econ-row"><span class="econ-label">Costs</span><span class="econ-val econ-neg" id="econ-cost">$0.00</span></div>
-                <div class="econ-row"><span class="econ-label">Profit</span><span class="econ-val" id="econ-profit">$0.00</span></div>
-                <div class="econ-row"><span class="econ-label">Deals</span><span class="econ-val" id="econ-deals">0</span></div>
-              </div>
+        <div id="feed-audit" class="hidden">
+          <div class="card" style="padding:0;">
+            <div style="max-height:calc(100vh - 320px);overflow-y:auto;">
+              <table class="audit-table">
+                <thead><tr><th>Time</th><th>Type</th><th>Status</th><th>Amount</th><th>Details</th></tr></thead>
+                <tbody id="audit-body"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+              </table>
             </div>
           </div>
-        </div>
-
-        <div class="arch-strip">
-          <div class="arch-item"><strong>Wallet</strong> Bare Runtime (WDK)</div>
-          <div class="arch-item"><strong>IPC</strong> stdin/stdout JSON-lines</div>
-          <div class="arch-item"><strong>Policy</strong> 8 rules, immutable</div>
-          <div class="arch-item"><strong>Swarm</strong> Hyperswarm P2P</div>
-          <div class="arch-item"><strong>Audit</strong> Append-only</div>
         </div>
       </div>
 
-      <!-- ═══════ WALLET ═══════ -->
-      <div class="view" id="view-wallet">
-        <div class="grid">
-          <div class="card col-7">
-            <div class="card-title">Balances</div>
+      <!-- ═══════ WEALTH ═══════ -->
+      <div class="view" id="view-wealth">
+        <div class="wealth-top">
+          <div class="card wealth-holdings">
+            <div class="card-title">Holdings <span class="badge badge-green" id="w-chain-count">--</span></div>
             <div class="portfolio-total" id="w-portfolio-total">$0.00 <span class="currency">USD</span></div>
-            <div class="alloc-bar" id="w-alloc-bar"></div>
-            <div id="w-asset-list"></div>
+            <div class="wealth-pie-row">
+              <canvas id="pie-chart" width="160" height="160"></canvas>
+              <div id="w-asset-list" class="wealth-asset-list"></div>
+            </div>
           </div>
-          <div class="card col-5">
-            <div class="card-title">Addresses</div>
-            <div id="w-addresses"><div class="empty">Loading...</div></div>
+          <div class="card wealth-txns">
+            <div class="card-title">Recent Transactions</div>
+            <ul class="feed-list" id="w-transactions" style="overflow-y:auto;">
+              <li class="empty">No transactions yet</li>
+            </ul>
           </div>
         </div>
-        <div class="section">
-          <span class="section-title">Send Payment</span>
-          <span class="section-line"></span>
-        </div>
-        <div class="grid">
-          <div class="card col-6">
-            <div class="form-group"><label class="form-label">Recipient</label><input class="form-input" id="pay-to" placeholder="0x..." /></div>
-            <div style="display:flex;gap:0.4rem;">
-              <div class="form-group" style="flex:1;"><label class="form-label">Amount</label><input class="form-input" id="pay-amount" type="number" step="0.01" placeholder="0.00" /></div>
-              <div class="form-group" style="width:90px;"><label class="form-label">Token</label><select class="form-select" id="pay-symbol"><option value="USDT">USDt</option><option value="XAUT">XAUt</option><option value="USAT">USAt</option><option value="ETH">ETH</option></select></div>
-              <div class="form-group" style="width:110px;"><label class="form-label">Chain</label><select class="form-select" id="pay-chain"><option value="ethereum">Ethereum</option><option value="sepolia">Sepolia</option><option value="arbitrum">Arbitrum</option></select></div>
-            </div>
-            <div class="form-group"><label class="form-label">Reason</label><input class="form-input" id="pay-reason" placeholder="Why?" /></div>
-            <button class="btn btn-primary" id="pay-btn">Send</button>
-            <div class="sim-result hidden" id="pay-result"></div>
+        <div class="card wealth-prices">
+          <div class="card-title">
+            <span>Market Prices</span>
+            <span class="price-src-label"><span class="price-src-dot"></span> by Bitfinex</span>
           </div>
-          <div class="card col-6">
-            <div class="card-title">Simulate (Dry-Run)</div>
-            <div class="form-group"><label class="form-label">Amount</label><input class="form-input" id="sim-amount" type="number" step="0.01" placeholder="0.00" /></div>
-            <div style="display:flex;gap:0.4rem;">
-              <div class="form-group" style="flex:1;"><label class="form-label">Token</label><select class="form-select" id="sim-symbol"><option value="USDT">USDt</option><option value="XAUT">XAUt</option><option value="USAT">USAt</option></select></div>
-              <div class="form-group" style="flex:1;"><label class="form-label">Chain</label><select class="form-select" id="sim-chain"><option value="ethereum">Ethereum</option><option value="sepolia">Sepolia</option></select></div>
-            </div>
-            <button class="btn" id="sim-btn">Simulate</button>
-            <div class="sim-result hidden" id="sim-result"></div>
-          </div>
+          <div class="price-grid" id="w-prices"></div>
         </div>
       </div>
 
@@ -520,103 +525,177 @@
       <div class="view" id="view-swarm">
         <div id="swarm-disabled" class="empty" style="padding:3rem;">Swarm not enabled. Start with SWARM_ENABLED=true.</div>
         <div id="swarm-content" class="hidden">
-          <div class="kpi-strip">
-            <div class="kpi"><div class="kpi-label">Agent</div><div class="kpi-value" id="sw-name" style="font-size:1.2rem;">--</div></div>
-            <div class="kpi"><div class="kpi-label">Reputation</div><div class="kpi-value green" id="sw-rep">--</div></div>
-            <div class="kpi"><div class="kpi-label">Peers</div><div class="kpi-value blue" id="sw-peer-count">0</div></div>
-            <div class="kpi"><div class="kpi-label">Sustainability</div><div class="kpi-value" id="sw-sustainability">--</div></div>
+          <div class="swarm-strip">
+            <div class="ss-item"><span class="ss-label">Rep</span> <span class="ss-value green" id="sw-rep">--</span></div>
+            <div class="ss-item"><span class="ss-label">Peers</span> <span class="ss-value blue" id="sw-peer-count">0</span></div>
+            <div class="ss-item"><span class="ss-label">Revenue</span> <span class="ss-value green" id="sw-econ-rev">$0</span></div>
+            <div class="ss-item"><span class="ss-label">Costs</span> <span class="ss-value red" id="sw-econ-cost">$0</span></div>
+            <div class="ss-item"><span class="ss-label">Open</span> <span class="ss-value" id="sw-deals-open">0</span></div>
+            <div class="ss-item"><span class="ss-label">Closed</span> <span class="ss-value" id="sw-deals-closed">0</span></div>
           </div>
-          <div class="grid">
-            <div class="card col-4"><div class="card-title">Peers</div><div id="sw-peers"><div class="empty">No peers</div></div></div>
-            <div class="card col-4"><div class="card-title">Board</div><div id="sw-anns" style="max-height:280px;overflow-y:auto;"><div class="empty">No announcements</div></div></div>
-            <div class="card col-4"><div class="card-title">Negotiations</div><div id="sw-rooms" style="max-height:280px;overflow-y:auto;"><div class="empty">No active rooms</div></div></div>
+          <div class="search-box">
+            <span class="search-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+            <input class="search-input" id="sw-search" placeholder="Search announcements..." />
+            <button class="search-clear" id="sw-search-clear">&times;</button>
           </div>
-          <div class="grid">
-            <div class="card col-5">
-              <div class="card-title">Economics</div>
-              <div id="sw-econ">
-                <div class="econ-row"><span class="econ-label">Revenue</span><span class="econ-val econ-pos" id="sw-econ-rev">$0.00</span></div>
-                <div class="econ-row"><span class="econ-label">Costs</span><span class="econ-val econ-neg" id="sw-econ-cost">$0.00</span></div>
-                <div class="econ-row"><span class="econ-label">Profit</span><span class="econ-val" id="sw-econ-profit">$0.00</span></div>
-                <div class="econ-row"><span class="econ-label">Deals</span><span class="econ-val" id="sw-econ-deals">0</span></div>
-              </div>
-            </div>
-            <div class="card col-7">
-              <div class="card-title">Events</div>
-              <div id="sw-events" style="max-height:220px;overflow-y:auto;"><div class="empty">No events</div></div>
-            </div>
+          <div class="tag-cloud" id="sw-tags"></div>
+          <div class="section">
+            <span class="section-title">Announcement Board</span>
+            <span class="section-line"></span>
+            <span class="section-count" id="sw-ann-count">0</span>
+          </div>
+          <div class="card" style="padding:0.5rem 0.75rem;">
+            <div id="sw-anns"><div class="empty">No announcements</div></div>
           </div>
         </div>
       </div>
 
-      <!-- ═══════ POLICIES ═══════ -->
+      <!-- ═══════ POLICY ENGINE ═══════ -->
       <div class="view" id="view-policies">
-        <div class="card">
-          <div class="card-title">Policy Engine <span class="badge badge-green">Active</span></div>
-          <div id="pol-content"><div class="empty">Loading...</div></div>
+        <!-- GUARDRAILS: compact, budget-first -->
+        <div class="card" style="margin-bottom:0.75rem;">
+          <div class="card-title">
+            Guardrails <span class="badge badge-green" id="pol-status">Active</span>
+            <button class="btn btn-sm" id="pol-edit-btn">Edit</button>
+          </div>
+          <div id="pol-guardrails"><div class="empty">Loading...</div></div>
         </div>
-      </div>
 
-      <!-- ═══════ AUDIT LOG ═══════ -->
-      <div class="view" id="view-audit">
-        <div class="card" style="padding:0;">
-          <div class="card-title" style="padding:0.85rem 1rem 0.4rem;">
-            Audit Log <span style="font-size:10px;color:var(--dim);font-weight:400;" id="audit-count">0 entries</span>
-          </div>
-          <div style="max-height:calc(100vh - 250px);overflow-y:auto;">
-            <table class="audit-table">
-              <thead><tr><th>Time</th><th>Type</th><th>Status</th><th>Amount</th><th>Details</th></tr></thead>
-              <tbody id="audit-body"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
-            </table>
-          </div>
+        <!-- STRATEGIES -->
+        <div class="section">
+          <span class="section-title">Strategies</span>
+          <span class="section-line"></span>
+          <button class="btn btn-sm" id="strat-add-btn">+ Add</button>
         </div>
-      </div>
+        <div id="pol-strategies"><div class="empty">No strategies loaded. Add one to guide your agent's behavior.</div></div>
 
-      <!-- ═══════ SETTINGS ═══════ -->
-      <div class="view" id="view-settings">
-        <div class="grid">
-          <div class="card col-6">
-            <div class="card-title">Agent Configuration</div>
-            <div id="settings-content"><div class="empty">Loading...</div></div>
-          </div>
-          <div class="card col-6">
-            <div class="card-title">About</div>
-            <div style="font-size:12px;color:var(--muted);line-height:1.8;">
-              <strong style="color:var(--text);">Oikos Protocol</strong><br>
-              Sovereign Agent Wallet Protocol<br>
-              Built on Tether's Bare/Pear Runtime + WDK<br><br>
-              <strong>Process Isolation:</strong> Wallet keys never leave the Bare Runtime isolate.<br>
-              <strong>Policy Engine:</strong> 8 immutable rules, deterministic evaluation.<br>
-              <strong>Audit Trail:</strong> Append-only, every proposal recorded.<br>
-              <strong>Swarm:</strong> Hyperswarm P2P, Noise E2E encryption.<br><br>
-              <span style="color:var(--dim);">Apache 2.0 License</span>
-            </div>
-          </div>
+        <!-- CAPABILITIES (collapsed modules) -->
+        <div class="pol-capabilities" id="pol-modules-wrap">
+          <span class="pol-cap-label" id="pol-cap-toggle" style="cursor:pointer;">Capabilities <span id="pol-mod-count">0</span> modules</span>
+          <div id="pol-modules" class="pol-module-list hidden"></div>
         </div>
       </div>
 
     </div>
 
-    <div class="reasoning-strip">
-      <div>
-        <div class="reasoning-label">Reasoning</div>
-        <div class="reasoning-time" id="reasoning-time">--</div>
+    <!-- BOTTOM BAR -->
+    <div class="bottom-bar">
+      <div class="bb-left">
+        <a href="https://reshimulabs.com" target="_blank">
+          <svg xmlns="http://www.w3.org/2000/svg" width="80" height="16" viewBox="0 0 249 60" role="img" aria-label="Reshimu Labs">
+            <style>.rl-ink{fill:currentColor}.rl-labs{fill:currentColor;opacity:0.55}</style>
+            <rect class="rl-ink" x="6" y="10" width="10" height="10" rx="1"/><rect class="rl-ink" x="17" y="10" width="10" height="10" rx="1"/><rect class="rl-ink" x="28" y="10" width="10" height="10" rx="1"/><rect class="rl-ink" x="6" y="21" width="10" height="10" rx="1"/><rect class="rl-ink" x="28" y="21" width="10" height="10" rx="1"/><rect class="rl-ink" x="6" y="32" width="10" height="10" rx="1"/><rect class="rl-ink" x="17" y="32" width="10" height="10" rx="1"/><rect class="rl-ink" x="28" y="32" width="10" height="10" rx="1"/>
+            <path class="rl-ink" d="M140 0V1080H380V816L354 850Q375 906 410.0 952.0Q445 998 496 1028Q535 1052 581.0 1065.5Q627 1079 676.0 1082.5Q725 1086 774 1080V826Q729 840 669.5 835.5Q610 831 562 808Q514 786 481.0 749.5Q448 713 431.0 663.5Q414 614 414 552V0Z" transform="translate(50.00,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-ink" d="M642 -30Q476 -30 349.5 41.5Q223 113 151.5 238.5Q80 364 80 526Q80 703 150.0 834.0Q220 965 343.0 1037.5Q466 1110 626 1110Q796 1110 915.0 1030.0Q1034 950 1091.0 805.0Q1148 660 1131 464H862V564Q862 729 809.5 801.5Q757 874 638 874Q499 874 433.5 789.5Q368 705 368 540Q368 389 433.5 306.5Q499 224 626 224Q706 224 763.0 259.0Q820 294 850 360L1122 282Q1061 134 929.5 52.0Q798 -30 642 -30ZM284 464V666H1000V464Z" transform="translate(63.50,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-ink" d="M562 -30Q358 -30 232.5 62.5Q107 155 80 324L358 366Q375 290 433.5 247.0Q492 204 582 204Q656 204 696.0 232.5Q736 261 736 312Q736 344 720.0 363.5Q704 383 648.5 402.0Q593 421 476 452Q344 486 265.0 528.0Q186 570 151.0 628.5Q116 687 116 770Q116 874 169.0 950.5Q222 1027 318.5 1068.5Q415 1110 546 1110Q673 1110 771.0 1071.0Q869 1032 929.5 960.0Q990 888 1004 790L726 740Q719 800 674.0 835.0Q629 870 552 876Q477 881 431.5 856.0Q386 831 386 784Q386 756 405.5 737.0Q425 718 486.5 698.0Q548 678 674 646Q797 614 871.5 571.5Q946 529 980.0 469.5Q1014 410 1014 326Q1014 160 894.0 65.0Q774 -30 562 -30Z" transform="translate(83.28,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-ink" d="M876 0V510Q876 547 872.0 604.5Q868 662 847.0 720.0Q826 778 778.5 817.0Q731 856 644 856Q609 856 569.0 845.0Q529 834 494.0 802.5Q459 771 436.5 710.0Q414 649 414 548L258 622Q258 750 310.0 862.0Q362 974 466.5 1043.0Q571 1112 730 1112Q857 1112 937.0 1069.0Q1017 1026 1061.5 960.0Q1106 894 1125.0 822.5Q1144 751 1148.0 692.0Q1152 633 1152 606V0ZM138 0V1440H380V700H414V0Z" transform="translate(101.10,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-ink" d="M160 1230V1470H432V1230ZM160 0V1080H432V0Z" transform="translate(121.78,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-ink" d="M1440 0V638Q1440 745 1389.5 804.5Q1339 864 1250 864Q1193 864 1151.0 837.5Q1109 811 1085.5 763.5Q1062 716 1062 654L948 730Q948 841 1000.5 926.0Q1053 1011 1141.5 1058.5Q1230 1106 1338 1106Q1523 1106 1617.5 996.5Q1712 887 1712 710V0ZM138 0V1080H378V722H412V0ZM790 0V638Q790 745 739.5 804.5Q689 864 600 864Q515 864 463.5 805.5Q412 747 412 654L298 734Q298 840 351.0 924.0Q404 1008 493.5 1057.0Q583 1106 694 1106Q821 1106 902.5 1052.0Q984 998 1023.0 908.0Q1062 818 1062 710V0Z" transform="translate(131.57,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-ink" d="M542 -32Q415 -32 335.0 11.0Q255 54 210.5 120.0Q166 186 147.0 257.5Q128 329 124.0 388.0Q120 447 120 474V1080H396V570Q396 533 400.0 475.5Q404 418 425.0 360.0Q446 302 493.5 263.0Q541 224 628 224Q663 224 703.0 235.0Q743 246 778.0 277.5Q813 309 835.5 370.5Q858 432 858 532L1014 458Q1014 330 962.0 218.0Q910 106 805.5 37.0Q701 -32 542 -32ZM892 0V358H858V1080H1132V0Z" transform="translate(161.20,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-labs" d="M160 0V1470H307V0Z" transform="translate(180.91,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-labs" d="M449 -30Q327 -30 244.5 14.0Q162 58 121.0 131.0Q80 204 80 290Q80 378 115.5 440.5Q151 503 212.5 543.0Q274 583 355 604Q437 624 536.5 639.5Q636 655 731.5 666.5Q827 678 899 689L847 657Q850 817 785.0 894.0Q720 971 559 971Q448 971 371.5 921.0Q295 871 264 763L121 805Q158 950 270.0 1030.0Q382 1110 561 1110Q709 1110 812.5 1054.5Q916 999 959 894Q979 847 985.0 789.0Q991 731 991 671V0H860V271L898 255Q843 116 727.0 43.0Q611 -30 449 -30ZM466 97Q569 97 646.0 134.0Q723 171 770.0 235.5Q817 300 831 381Q843 433 844.0 495.5Q845 558 845 589L901 560Q826 550 738.5 540.0Q651 530 566.5 517.0Q482 504 414 486Q368 473 325.0 449.5Q282 426 254.5 387.0Q227 348 227 290Q227 243 250.5 199.0Q274 155 326.5 126.0Q379 97 466 97Z" transform="translate(188.70,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-labs" d="M625 -30Q476 -30 373.0 45.5Q270 121 217.0 250.5Q164 380 164 541Q164 705 217.5 833.5Q271 962 375.0 1036.0Q479 1110 631 1110Q779 1110 885.0 1035.0Q991 960 1047.5 831.0Q1104 702 1104 541Q1104 379 1047.0 250.0Q990 121 883.0 45.5Q776 -30 625 -30ZM139 0V1440H287V813H271V0ZM610 107Q723 107 798.0 164.0Q873 221 910.5 319.5Q948 418 948 541Q948 663 911.0 761.0Q874 859 798.5 916.0Q723 973 607 973Q494 973 419.5 918.0Q345 863 308.0 765.5Q271 668 271 541Q271 416 308.0 317.5Q345 219 420.0 163.0Q495 107 610 107Z" transform="translate(206.80,39.00) scale(0.01600,-0.01600)"/>
+            <path class="rl-labs" d="M543 -29Q353 -29 230.5 53.0Q108 135 80 281L230 306Q254 214 339.5 159.5Q425 105 551 105Q674 105 745.0 156.5Q816 208 816 297Q816 347 793.5 378.5Q771 410 702.0 437.0Q633 464 496 501Q349 541 266.0 581.0Q183 621 148.0 673.5Q113 726 113 802Q113 894 165.0 963.5Q217 1033 309.0 1071.5Q401 1110 523 1110Q645 1110 741.5 1070.5Q838 1031 897.0 960.0Q956 889 967 795L817 768Q802 863 722.5 918.5Q643 974 521 976Q406 979 334.0 932.5Q262 886 262 809Q262 766 288.0 735.5Q314 705 382.5 678.0Q451 651 578 619Q727 581 812.0 539.0Q897 497 933.0 440.0Q969 383 969 299Q969 146 855.5 58.5Q742 -29 543 -29Z" transform="translate(226.06,39.00) scale(0.01600,-0.01600)"/>
+          </svg>
+        </a>
       </div>
-      <div class="reasoning-text" id="reasoning-text">Waiting for agent...</div>
+      <div class="bb-center" id="bb-clock">--:--:--</div>
+      <div class="bb-right"><button id="settings-btn" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button></div>
     </div>
   </div>
 
   <!-- CHAT -->
   <div class="chat-panel">
-    <div class="chat-header"><div class="chat-title">Chat</div></div>
-    <div class="chat-messages" id="chat-messages">
-      <div class="chat-msg system">
-        <div class="chat-bubble">Welcome to Oikos App. Send instructions to your agent below. All proposals flow through the PolicyEngine.</div>
-      </div>
+    <div class="chat-status-bar">
+      <span class="cs-item"><span class="cs-dot off" id="td-wallet"></span> Wallet</span>
+      <span class="cs-item"><span class="cs-dot off" id="td-swarm"></span> Swarm</span>
+      <span class="cs-item"><span class="cs-dot off" id="td-companion"></span> Agent</span>
     </div>
+    <div class="chat-messages" id="chat-messages"></div>
     <div class="chat-input-area">
       <textarea class="chat-input" id="chat-input" placeholder="Type instruction..." rows="3"></textarea>
       <button class="chat-send" id="chat-send">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Send Payment Modal -->
+<div class="modal-overlay hidden" id="send-modal">
+  <div class="modal">
+    <div class="modal-title">Send Payment <button class="modal-close" id="send-modal-close">&times;</button></div>
+    <div class="form-group"><label class="form-label">Recipient</label><input class="form-input" id="pay-to" placeholder="0x..." /></div>
+    <div style="display:flex;gap:0.4rem;">
+      <div class="form-group" style="flex:1;"><label class="form-label">Amount</label><input class="form-input" id="pay-amount" type="number" step="0.01" placeholder="0.00" /></div>
+      <div class="form-group" style="width:90px;"><label class="form-label">Token</label><select class="form-select" id="pay-symbol"><option value="USDT">USDt</option><option value="XAUT">XAUt</option><option value="USAT">USAt</option><option value="ETH">ETH</option></select></div>
+      <div class="form-group" style="width:110px;"><label class="form-label">Chain</label><select class="form-select" id="pay-chain"><option value="ethereum">Ethereum</option><option value="sepolia">Sepolia</option><option value="arbitrum">Arbitrum</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Reason</label><input class="form-input" id="pay-reason" placeholder="Why?" /></div>
+    <button class="btn btn-primary" id="pay-btn">Send</button>
+    <div class="sim-result hidden" id="pay-result"></div>
+  </div>
+</div>
+
+<!-- Policy Edit Modal -->
+<div class="modal-overlay hidden" id="pol-edit-modal">
+  <div class="modal" style="width:520px;">
+    <div class="modal-title">Edit Guardrails <button class="modal-close" id="pol-edit-close">&times;</button></div>
+    <div id="pol-edit-form">
+      <div class="form-group"><label class="form-label">Policy Name</label><input class="form-input" id="pol-name" value="Conservative Policy" /></div>
+      <div class="form-group"><label class="form-label">Max Per Transaction (USDT)</label><input class="form-input" id="pol-max-tx" type="number" value="50" /></div>
+      <div class="form-group"><label class="form-label">Max Per Day (USDT)</label><input class="form-input" id="pol-max-day" type="number" value="500" /></div>
+      <div class="form-group"><label class="form-label">Max Per Session (USDT)</label><input class="form-input" id="pol-max-session" type="number" value="200" /></div>
+      <div class="form-group"><label class="form-label">Max Per Recipient/Day (USDT)</label><input class="form-input" id="pol-max-recipient" type="number" value="100" /></div>
+      <div class="form-group"><label class="form-label">Cooldown (seconds)</label><input class="form-input" id="pol-cooldown" type="number" value="30" /></div>
+      <div class="form-group"><label class="form-label">Min Confidence (0-1)</label><input class="form-input" id="pol-confidence" type="number" step="0.1" min="0" max="1" value="0.7" /></div>
+      <div style="display:flex;gap:0.4rem;">
+        <div class="form-group" style="flex:1;"><label class="form-label">Active Hours Start</label><input class="form-input" id="pol-hour-start" type="number" min="0" max="23" value="8" /></div>
+        <div class="form-group" style="flex:1;"><label class="form-label">Active Hours End</label><input class="form-input" id="pol-hour-end" type="number" min="0" max="23" value="22" /></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:0.5rem;margin-top:0.75rem;">
+      <button class="btn btn-primary" id="pol-save-btn">Apply & Restart Wallet</button>
+      <button class="btn" id="pol-cancel-btn">Cancel</button>
+    </div>
+    <div class="sim-result hidden" id="pol-save-result" style="margin-top:0.5rem;"></div>
+    <div style="margin-top:0.75rem;font-size:10px;color:var(--dim);line-height:1.5;">
+      Changing guardrails writes a new policy config and restarts the wallet isolate.<br>
+      The policy is immutable during runtime — restart enforces the new rules.<br>
+      All amounts are in USDT-equivalent (6 decimal raw = human * 10^6).
+    </div>
+  </div>
+</div>
+
+<!-- Strategy Add Modal -->
+<div class="modal-overlay hidden" id="strat-add-modal">
+  <div class="modal" style="width:560px;">
+    <div class="modal-title">Add Strategy <button class="modal-close" id="strat-add-close">&times;</button></div>
+    <div class="form-group"><label class="form-label">Strategy Name</label><input class="form-input" id="strat-name" placeholder="e.g. conservative-yield" /></div>
+    <div class="form-group">
+      <label class="form-label">Strategy Content (Markdown)</label>
+      <textarea class="form-input" id="strat-content" rows="12" style="min-height:200px;resize:vertical;font-size:11px;" placeholder="# My Strategy&#10;&#10;## Rules&#10;- Keep 40% in stablecoins&#10;- Auto-deposit idle USDT into Aave when > 300&#10;- Rebalance at 10% drift&#10;&#10;## Assets&#10;- USDT, XAUT, ETH, BTC&#10;&#10;## Risk&#10;- Conservative: max 30 USDT auto-bid on swarm"></textarea>
+    </div>
+    <div style="display:flex;gap:0.5rem;">
+      <button class="btn btn-primary" id="strat-save-btn">Save Strategy</button>
+      <button class="btn" id="strat-cancel-btn">Cancel</button>
+    </div>
+    <div class="sim-result hidden" id="strat-save-result" style="margin-top:0.5rem;"></div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay hidden" id="settings-modal">
+  <div class="modal">
+    <div class="modal-title">Settings <button class="modal-close" id="settings-modal-close">&times;</button></div>
+    <div id="settings-content"><div class="empty">Loading...</div></div>
+    <div style="margin-top:1rem;font-size:12px;color:var(--muted);line-height:1.8;">
+      <strong style="color:var(--text);">Oikos Protocol</strong><br>
+      Sovereign Agent Wallet Protocol<br>
+      Built on Tether's Bare/Pear Runtime + WDK<br><br>
+      <strong>Process Isolation:</strong> Wallet keys never leave the Bare Runtime isolate.<br>
+      <strong>Policy Engine:</strong> Immutable rules, deterministic evaluation.<br>
+      <strong>Audit Trail:</strong> Append-only, every proposal recorded.<br>
+      <strong>Swarm:</strong> Hyperswarm P2P, Noise E2E encryption.<br><br>
+      <span style="color:var(--dim);">Apache 2.0 License</span>
     </div>
   </div>
 </div>

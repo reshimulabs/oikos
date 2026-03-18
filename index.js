@@ -47,6 +47,8 @@ const state = {
   instructions: [],
   chatMessages: [],
   identity: {},
+  prices: [],
+  addresses: [],
   lastUpdate: 0,
 }
 
@@ -106,6 +108,9 @@ if (!agentPubkey) {
 }
 
 const topicSeed = env.OIKOS_TOPIC_SEED || 'oikos-companion-default'
+
+// Wallet dashboard URL for direct API access (prices, etc.)
+const walletUrl = env.OIKOS_WALLET_URL || 'http://127.0.0.1:3420'
 
 console.log('[companion] Pubkey:', companionPubkey.slice(0, 16) + '...')
 console.log('[companion] Set this as COMPANION_OWNER_PUBKEY on your agent.')
@@ -170,6 +175,9 @@ function handleAgentMessage (buf) {
         break
       case 'address_update':
         state.addresses = msg.addresses || []
+        break
+      case 'price_update':
+        state.prices = msg.prices || []
         break
       case 'identity_update':
         state.identity = msg.identity || {}
@@ -275,6 +283,54 @@ function readBody (req) {
   })
 }
 
+/** HTTP GET helper for bare-http1 (no fetch in Bare Runtime) */
+function httpGet (url) {
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url)
+      const opts = { hostname: u.hostname, port: u.port || 80, path: u.pathname + u.search, method: 'GET', timeout: 3000 }
+      const req = http.request(opts, (res) => {
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(Buffer.concat(chunks).toString()))
+          } catch { resolve(null) }
+        })
+      })
+      req.on('error', () => resolve(null))
+      req.on('timeout', () => { req.destroy(); resolve(null) })
+      req.end()
+    } catch { resolve(null) }
+  })
+}
+
+function httpPost (url, body) {
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url)
+      const payload = JSON.stringify(body)
+      const opts = {
+        hostname: u.hostname, port: u.port || 80,
+        path: u.pathname + u.search, method: 'POST', timeout: 10000,
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+      }
+      const req = http.request(opts, (res) => {
+        const chunks = []
+        res.on('data', (chunk) => chunks.push(chunk))
+        res.on('end', () => {
+          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
+          catch { resolve(null) }
+        })
+      })
+      req.on('error', () => resolve(null))
+      req.on('timeout', () => { req.destroy(); resolve(null) })
+      req.write(payload)
+      req.end()
+    } catch { resolve(null) }
+  })
+}
+
 function json (res, data, status) {
   res.statusCode = status || 200
   res.setHeader('Content-Type', 'application/json')
@@ -333,8 +389,55 @@ const server = http.createServer(async (req, res) => {
     return json(res, { addresses: state.addresses || [] })
   }
 
-  if (url === '/api/policies') {
+  if (url === '/api/policies' && req.method === 'GET') {
+    // Proxy to wallet for full policy data including rules
+    if (walletUrl) {
+      try {
+        const data = await httpGet(walletUrl + '/api/policies')
+        return json(res, data)
+      } catch (e) {
+        return json(res, { policies: state.policies })
+      }
+    }
     return json(res, { policies: state.policies })
+  }
+
+  if (url === '/api/policies' && req.method === 'POST') {
+    if (walletUrl) {
+      try {
+        const body = await readBody(req)
+        const data = await httpPost(walletUrl + '/api/policies', body)
+        return json(res, data || { error: 'No response from wallet' })
+      } catch (e) {
+        return json(res, { error: 'Failed to update policy' }, 500)
+      }
+    }
+    return json(res, { error: 'Wallet not connected' }, 503)
+  }
+
+  if (url === '/api/strategies' && req.method === 'GET') {
+    if (walletUrl) {
+      try {
+        const data = await httpGet(walletUrl + '/api/strategies')
+        return json(res, data)
+      } catch (e) {
+        return json(res, { strategies: [], modules: [] })
+      }
+    }
+    return json(res, { strategies: [], modules: [] })
+  }
+
+  if (url === '/api/strategies' && req.method === 'POST') {
+    if (walletUrl) {
+      try {
+        const body = await readBody(req)
+        const data = await httpPost(walletUrl + '/api/strategies', body)
+        return json(res, data || { error: 'No response from wallet' })
+      } catch (e) {
+        return json(res, { error: 'Failed to save strategy' }, 500)
+      }
+    }
+    return json(res, { error: 'Wallet not connected' }, 503)
   }
 
   if (url.startsWith('/api/audit')) {
@@ -359,8 +462,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/valuation') {
-    // Simple client-side valuation from cached balances
-    const prices = { USDT: 1, USAT: 1, XAUT: 2400, BTC: 60000, ETH: 3000 }
+    // Use live prices from state cache (populated by companion or wallet-direct)
+    const fallback = { USDT: 1, USAT: 1, XAUT: 4975, BTC: 73900, ETH: 2300 }
+    const livePrices = {}
+    if (state.prices && state.prices.length > 0) {
+      state.prices.forEach(p => { livePrices[p.symbol] = p.priceUsd })
+    }
+    const prices = Object.assign({}, fallback, livePrices)
     const decimals = { USDT: 6, USAT: 6, XAUT: 6, BTC: 8, ETH: 18 }
     let totalUsd = 0
     const assets = (state.balances || []).map(b => {
@@ -376,16 +484,38 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/prices') {
+    // 1. Try companion channel cache (P2P live)
+    if (state.prices && state.prices.length > 0) {
+      return json(res, { source: 'agent-live', prices: state.prices })
+    }
+    // 2. Try fetching directly from wallet dashboard (localhost)
+    try {
+      const data = await httpGet(walletUrl + '/api/prices')
+      if (data && data.prices && data.prices.length > 0) {
+        state.prices = data.prices // cache for next request
+        return json(res, { source: 'wallet-direct', prices: data.prices })
+      }
+    } catch { /* wallet not reachable */ }
+    // 3. Fallback
     return json(res, {
-      source: 'companion-cache',
+      source: 'fallback',
       prices: [
-        { symbol: 'USDT', usd: 1 },
-        { symbol: 'USAT', usd: 1 },
-        { symbol: 'XAUT', usd: 2400 },
-        { symbol: 'BTC', usd: 60000 },
-        { symbol: 'ETH', usd: 3000 }
+        { symbol: 'USDT', priceUsd: 1, source: 'fallback', updatedAt: Date.now() },
+        { symbol: 'USAT', priceUsd: 1, source: 'fallback', updatedAt: Date.now() },
+        { symbol: 'XAUT', priceUsd: 4975, source: 'fallback', updatedAt: Date.now() },
+        { symbol: 'BTC', priceUsd: 73900, source: 'fallback', updatedAt: Date.now() },
+        { symbol: 'ETH', priceUsd: 2300, source: 'fallback', updatedAt: Date.now() }
       ]
     })
+  }
+
+  // Historical prices — proxy to wallet dashboard
+  if (url.startsWith('/api/prices/history/')) {
+    try {
+      const data = await httpGet(walletUrl + url)
+      if (data) return json(res, data)
+    } catch { /* wallet not reachable */ }
+    return json(res, { symbol: url.split('/').pop(), history: [] })
   }
 
   if (url === '/api/identity') {

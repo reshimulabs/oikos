@@ -52,6 +52,10 @@ export interface WalletContext {
         status: string;
         bids: number;
     }>;
+    activeStrategies: Array<{
+        name: string;
+        content: string;
+    }>;
 }
 /** Chat message stored in history */
 export interface ChatMessage {

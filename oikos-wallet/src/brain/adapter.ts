@@ -25,6 +25,7 @@ export interface WalletContext {
   swarmPeers: number;
   swarmAnnouncements: Array<{ id: string; title: string; category: string; agentName: string; priceRange?: { min: string; max: string; symbol: string } }>;
   swarmRooms: Array<{ announcementId: string; status: string; bids: number }>;
+  activeStrategies: Array<{ name: string; content: string }>;
 }
 
 /** Chat message stored in history */
@@ -222,6 +223,15 @@ export class OllamaBrainAdapter implements BrainAdapter {
       }
     }
 
+    // Active strategies — injected as behavioral guidance
+    if (ctx.activeStrategies.length > 0) {
+      lines.push('Active Strategies:');
+      for (const s of ctx.activeStrategies) {
+        // Include strategy content (already truncated to 500 chars in buildWalletContext)
+        lines.push(`[${s.name}] ${s.content.replace(/\n/g, ' ').replace(/#+\s*/g, '').slice(0, 300)}`);
+      }
+    }
+
     return lines.join('\n');
   }
 }
@@ -348,6 +358,36 @@ export async function buildWalletContext(services: OikosServices): Promise<Walle
     rooms?: Array<{ announcementId: string; status: string; bids: Array<unknown> }>;
   } | undefined;
 
+  // Load active strategies from disk
+  const activeStrategies: Array<{ name: string; content: string }> = [];
+  try {
+    const { existsSync, readdirSync, readFileSync } = await import('fs');
+    const { join, dirname } = await import('path');
+    const { fileURLToPath } = await import('url');
+    const scriptDir = dirname(fileURLToPath(import.meta.url));
+    const repoRoot = join(scriptDir, '..', '..', '..');
+    const stratDirs = [
+      join(repoRoot, 'strategies'),
+      join(process.cwd(), '..', 'strategies'),
+      join(process.cwd(), 'strategies'),
+    ];
+    for (const dir of stratDirs) {
+      if (!existsSync(dir)) continue;
+      const files = readdirSync(dir).filter((f: string) => f.endsWith('.md'));
+      for (const file of files) {
+        const content = readFileSync(join(dir, file), 'utf-8');
+        // Skip disabled strategies
+        if (/enabled:\s*false/i.test(content)) continue;
+        const nameMatch = content.match(/^#\s+(.+)$/m);
+        activeStrategies.push({
+          name: nameMatch?.[1] ?? file.replace('.md', ''),
+          content: content.slice(0, 500), // Truncate to save context tokens
+        });
+      }
+      break; // Use first found directory
+    }
+  } catch { /* strategies dir doesn't exist yet — fine */ }
+
   return {
     balances: balances as Array<{ symbol: string; chain: string; formatted: string }>,
     policies: policies as Array<{ rule: string; remaining?: string; status?: string }>,
@@ -360,5 +400,6 @@ export async function buildWalletContext(services: OikosServices): Promise<Walle
     swarmRooms: (swarmState?.rooms ?? []).map(r => ({
       announcementId: r.announcementId, status: r.status, bids: r.bids?.length ?? 0,
     })),
+    activeStrategies,
   };
 }

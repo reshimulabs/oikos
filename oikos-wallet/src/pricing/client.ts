@@ -40,19 +40,57 @@ export interface PricePoint {
 
 /** Token symbol to Bitfinex trading pair mapping */
 const BITFINEX_PAIRS: Record<string, { from: string; to: string }> = {
+  // Major crypto
   BTC: { from: 'BTC', to: 'USD' },
   ETH: { from: 'ETH', to: 'USD' },
+  SOL: { from: 'SOL', to: 'USD' },
+  XRP: { from: 'XRP', to: 'USD' },
+  ADA: { from: 'ADA', to: 'USD' },
+  DOT: { from: 'DOT', to: 'USD' },
+  AVAX: { from: 'AVAX', to: 'USD' },
+  LINK: { from: 'LINK', to: 'USD' },
+  LTC: { from: 'LTC', to: 'USD' },
+  UNI: { from: 'UNI', to: 'USD' },
+  AAVE: { from: 'AAVE', to: 'USD' },
+  NEAR: { from: 'NEAR', to: 'USD' },
+  ARB: { from: 'ARB', to: 'USD' },
+  SUI: { from: 'SUI', to: 'USD' },
+  APT: { from: 'APT', to: 'USD' },
+  TON: { from: 'TON', to: 'USD' },
+  DOGE: { from: 'DOGE', to: 'USD' },
+  SHIB: { from: 'SHIB', to: 'USD' },
+  TRX: { from: 'TRX', to: 'USD' },
+  FIL: { from: 'FIL', to: 'USD' },
+  // Tether assets
   USDT: { from: 'UST', to: 'USD' },
   XAUT: { from: 'XAUT', to: 'USD' },
 };
 
 /** Fallback prices when Bitfinex is unreachable */
 const FALLBACK_PRICES: Record<string, number> = {
+  BTC: 73900,
+  ETH: 2300,
+  SOL: 130,
+  XRP: 2.30,
+  ADA: 0.70,
+  DOT: 5.80,
+  AVAX: 22,
+  LINK: 14,
+  LTC: 95,
+  UNI: 7.50,
+  AAVE: 190,
+  NEAR: 3.50,
+  ARB: 0.45,
+  SUI: 2.80,
+  APT: 6.50,
+  TON: 3.40,
+  DOGE: 0.17,
+  SHIB: 0.000013,
+  TRX: 0.23,
+  FIL: 3.80,
   USDT: 1.0,
   USAT: 1.0,
-  XAUT: 2650,
-  BTC: 85000,
-  ETH: 3200,
+  XAUT: 4975,
 };
 
 /** Token decimals for human-readable conversion */
@@ -62,6 +100,24 @@ const DECIMALS: Record<string, number> = {
   XAUT: 6,
   BTC: 8,
   ETH: 18,
+  SOL: 9,
+  XRP: 6,
+  ADA: 6,
+  DOT: 10,
+  AVAX: 18,
+  LINK: 18,
+  LTC: 8,
+  UNI: 18,
+  AAVE: 18,
+  NEAR: 24,
+  ARB: 18,
+  SUI: 9,
+  APT: 8,
+  TON: 9,
+  DOGE: 8,
+  SHIB: 18,
+  TRX: 6,
+  FIL: 18,
 };
 
 export class PricingService {
@@ -78,7 +134,7 @@ export class PricingService {
       const client = new BitfinexPricingClient();
       this.provider = new PricingProvider({
         client,
-        priceCacheDurationMs: 5 * 60 * 1000, // 5-min cache for agent responsiveness
+        priceCacheDurationMs: 30 * 1000, // 30s cache — fast refresh for live market view
       });
       this.initialized = true;
       console.error('[pricing] Bitfinex pricing client initialized (5-min cache)');
@@ -91,7 +147,7 @@ export class PricingService {
   /** Get current USD price for a token symbol */
   async getPrice(symbol: string): Promise<AssetPrice> {
     const cached = this.cachedPrices.get(symbol);
-    if (cached && Date.now() - cached.updatedAt < 60_000) {
+    if (cached && Date.now() - cached.updatedAt < 10_000) {
       return cached;
     }
 

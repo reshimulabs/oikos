@@ -90,6 +90,17 @@ export interface CompanionApprovalRequest {
     reason: string;
     timestamp: number;
 }
+/** Live market prices from the pricing service */
+export interface CompanionPriceUpdate {
+    type: 'price_update';
+    prices: Array<{
+        symbol: string;
+        priceUsd: number;
+        source: string;
+        updatedAt: number;
+    }>;
+    timestamp: number;
+}
 /** Chat reply from the brain (agent response to human message) */
 export interface CompanionChatReply {
     type: 'chat_reply';
@@ -113,7 +124,7 @@ export interface CompanionPing {
     timestamp: number;
 }
 /** Messages sent FROM the agent TO the companion */
-export type AgentToCompanionMessage = CompanionBalanceUpdate | CompanionAgentReasoning | CompanionSwarmStatus | CompanionPolicyUpdate | CompanionExecutionNotify | CompanionApprovalRequest | CompanionChatReply;
+export type AgentToCompanionMessage = CompanionBalanceUpdate | CompanionAgentReasoning | CompanionSwarmStatus | CompanionPolicyUpdate | CompanionPriceUpdate | CompanionExecutionNotify | CompanionApprovalRequest | CompanionChatReply;
 /** Messages sent FROM the companion TO the agent */
 export type CompanionToAgentMessage = CompanionInstruction | CompanionApprovalResponse | CompanionPing;
 /** All companion messages */

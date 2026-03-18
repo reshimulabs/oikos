@@ -68,6 +68,13 @@ export interface CompanionApprovalRequest {
   timestamp: number;
 }
 
+/** Live market prices from the pricing service */
+export interface CompanionPriceUpdate {
+  type: 'price_update';
+  prices: Array<{ symbol: string; priceUsd: number; source: string; updatedAt: number }>;
+  timestamp: number;
+}
+
 /** Chat reply from the brain (agent response to human message) */
 export interface CompanionChatReply {
   type: 'chat_reply';
@@ -104,6 +111,7 @@ export type AgentToCompanionMessage =
   | CompanionAgentReasoning
   | CompanionSwarmStatus
   | CompanionPolicyUpdate
+  | CompanionPriceUpdate
   | CompanionExecutionNotify
   | CompanionApprovalRequest
   | CompanionChatReply;

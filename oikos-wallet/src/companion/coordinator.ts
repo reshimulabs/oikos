@@ -34,6 +34,7 @@ import type {
 export interface CompanionStateProvider {
   getBalances(): Promise<BalanceResponse[]>;
   getPolicies(): Promise<PolicyStatus[]>;
+  getPrices?(): Promise<Array<{ symbol: string; priceUsd: number; source: string; updatedAt: number }>>;
 }
 
 export interface CompanionConfig {
@@ -293,6 +294,16 @@ export class CompanionCoordinator {
       };
       this.send(policyMsg);
     } catch { /* wallet may not be ready */ }
+
+    // Price update (from pricing service)
+    if (this.stateProvider.getPrices) {
+      try {
+        const prices = await this.stateProvider.getPrices();
+        if (prices.length > 0) {
+          this.send({ type: 'price_update', prices, timestamp: Date.now() });
+        }
+      } catch { /* pricing may not be ready */ }
+    }
 
     // Swarm status (with full data for UI rendering)
     if (this.swarm) {
