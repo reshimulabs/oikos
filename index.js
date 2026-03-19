@@ -444,6 +444,22 @@ const server = http.createServer(async (req, res) => {
     return json(res, { entries: state.executions })
   }
 
+  // ── Auth API — proxy to wallet dashboard ──
+  if (url.startsWith('/api/auth/') && walletUrl) {
+    try {
+      if (req.method === 'GET') {
+        const data = await httpGet(walletUrl + url)
+        return json(res, data)
+      } else if (req.method === 'POST') {
+        const body = await readBody(req)
+        const data = await httpPost(walletUrl + url, body)
+        return json(res, data)
+      }
+    } catch (e) {
+      return json(res, { error: 'Auth proxy failed: ' + e.message }, 500)
+    }
+  }
+
   if (url === '/api/swarm') {
     return json(res, {
       enabled: state.swarm.enabled,

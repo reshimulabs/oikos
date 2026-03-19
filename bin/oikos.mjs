@@ -109,6 +109,66 @@ async function cmdHealth() {
   ]);
 }
 
+async function cmdAuth() {
+  const sub = args[1] || 'status';
+  const { createInterface } = await import('readline');
+
+  if (sub === 'status') {
+    const data = await api('/api/auth/status');
+    if (JSON_MODE) { console.log(JSON.stringify(data)); return; }
+    if (!data) { console.log(`${c.red}Cannot get auth status${c.reset}`); return; }
+    const dot = data.enabled ? `${c.green}●${c.reset}` : `${c.dim}○${c.reset}`;
+    box('Passphrase Auth', [
+      `${dot} ${data.enabled ? 'Enabled' : 'Disabled'}`,
+      data.enabled ? `Threshold: ${data.threshold} USDT | Timeout: ${data.timeoutMinutes} min` : '',
+      data.authenticated ? `${c.green}Currently authenticated${c.reset}` : '',
+    ].filter(Boolean));
+    return;
+  }
+
+  if (sub === 'setup') {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const ask = (q) => new Promise(r => rl.question(q, r));
+    process.stdout.write(`${c.yellow}Set passphrase: ${c.reset}`);
+    // Note: readline doesn't support hidden input natively — for demo purposes
+    const pp = await ask('');
+    const threshold = await ask(`Threshold (USDT, default 100): `);
+    const timeout = await ask(`Timeout (minutes, default 15): `);
+    rl.close();
+
+    const result = await apiPost('/api/auth/setup', {
+      passphrase: pp,
+      threshold: Number(threshold) || 100,
+      timeoutMinutes: Number(timeout) || 15,
+    });
+    if (result?.success) console.log(`${c.green}✓ Passphrase auth enabled${c.reset}`);
+    else console.log(`${c.red}✗ ${result?.error || 'Failed'}${c.reset}`);
+    return;
+  }
+
+  if (sub === 'disable') {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const pp = await new Promise(r => rl.question('Enter current passphrase: ', r));
+    rl.close();
+    const result = await apiPost('/api/auth/disable', { passphrase: pp });
+    if (result?.success) console.log(`${c.green}✓ Passphrase auth disabled${c.reset}`);
+    else console.log(`${c.red}✗ Incorrect passphrase${c.reset}`);
+    return;
+  }
+
+  if (sub === 'verify') {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const pp = await new Promise(r => rl.question('Passphrase: ', r));
+    rl.close();
+    const result = await apiPost('/api/auth/verify', { passphrase: pp });
+    if (result?.valid) console.log(`${c.green}✓ Authenticated (expires: ${new Date(result.expiresAt).toLocaleTimeString()})${c.reset}`);
+    else console.log(`${c.red}✗ Invalid${c.reset}`);
+    return;
+  }
+
+  console.log(`Usage: oikos auth [status|setup|disable|verify]`);
+}
+
 async function cmdBalance() {
   const data = await mcp('wallet_balance_all');
   if (!data) { console.log(`${c.red}Failed to get balances${c.reset}`); return; }
@@ -396,6 +456,7 @@ async function main() {
     case 'audit': case 'log': return cmdAudit();
     case 'tools': case 'mcp': return cmdTools();
     case 'health': case 'status': return cmdHealth();
+    case 'auth': return cmdAuth();
     case 'help': case '--help': case '-h': return printHelp();
     default:
       // One-shot: treat as chat message

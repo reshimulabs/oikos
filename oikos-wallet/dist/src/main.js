@@ -240,6 +240,12 @@ async function main() {
     if (sparkEnabled) {
         console.error('[spark] Lightning wallet enabled');
     }
+    // 11a. Passphrase auth
+    const { PassphraseAuth } = await import('./auth/passphrase.js');
+    const auth = new PassphraseAuth();
+    if (auth.getStatus().enabled) {
+        console.log('[auth] Passphrase auth enabled. Threshold:', auth.getStatus().threshold, 'USDT');
+    }
     // 11. Assemble services
     const services = {
         wallet,
@@ -253,6 +259,7 @@ async function main() {
         chatMessages,
         x402: x402Client,
         sparkEnabled,
+        auth,
     };
     // 11. Register companion chat handler (now that brain is available)
     if (companion && brain) {

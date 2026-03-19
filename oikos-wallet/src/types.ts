@@ -69,4 +69,6 @@ export interface OikosServices {
   x402: X402Client | null;
   /** Spark/Lightning wallet enabled */
   sparkEnabled: boolean;
+  /** Passphrase authentication module */
+  auth: import('./auth/passphrase.js').PassphraseAuth | null;
 }

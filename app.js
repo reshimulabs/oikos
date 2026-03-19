@@ -727,13 +727,117 @@ document.querySelectorAll('.modal-overlay').forEach(function (el) {
   el.addEventListener('click', function (e) { if (e.target === el) el.classList.add('hidden') })
 })
 
+/* ═══ PASSPHRASE AUTH ═══ */
+
+// Update auth UI in Policy Engine tab
+async function updateAuthUI () {
+  var data = await api('/api/auth/status')
+  if (!data) return
+  var badge = document.getElementById('auth-badge')
+  var enableBtn = document.getElementById('auth-enable-btn')
+  var disableBtn = document.getElementById('auth-disable-btn')
+  var ppInput = document.getElementById('auth-passphrase')
+
+  if (data.enabled) {
+    badge.textContent = data.authenticated ? 'Authenticated' : 'Locked'
+    badge.style.color = data.authenticated ? 'var(--green)' : 'var(--yellow)'
+    enableBtn.classList.add('hidden')
+    disableBtn.classList.remove('hidden')
+    ppInput.placeholder = 'Enter current passphrase to disable'
+    document.getElementById('auth-threshold').value = data.threshold
+    document.getElementById('auth-timeout').value = data.timeoutMinutes
+  } else {
+    badge.textContent = 'Disabled'
+    badge.style.color = 'var(--dim)'
+    enableBtn.classList.remove('hidden')
+    disableBtn.classList.add('hidden')
+    ppInput.placeholder = 'Min 4 characters'
+  }
+}
+
+// Enable auth
+document.getElementById('auth-enable-btn').addEventListener('click', async function () {
+  var pp = document.getElementById('auth-passphrase').value
+  var threshold = Number(document.getElementById('auth-threshold').value) || 100
+  var timeout = Number(document.getElementById('auth-timeout').value) || 15
+  if (!pp || pp.length < 4) { showResult('auth-result', 'Passphrase must be at least 4 characters', true); return }
+  var result = await apiPost('/api/auth/setup', { passphrase: pp, threshold: threshold, timeoutMinutes: timeout })
+  if (result && result.success) {
+    showResult('auth-result', 'Passphrase auth enabled!', false)
+    document.getElementById('auth-passphrase').value = ''
+    updateAuthUI()
+  } else {
+    showResult('auth-result', result ? result.error : 'Failed', true)
+  }
+})
+
+// Disable auth
+document.getElementById('auth-disable-btn').addEventListener('click', async function () {
+  var pp = document.getElementById('auth-passphrase').value
+  if (!pp) { showResult('auth-result', 'Enter current passphrase to disable', true); return }
+  var result = await apiPost('/api/auth/disable', { passphrase: pp })
+  if (result && result.success) {
+    showResult('auth-result', 'Passphrase auth disabled', false)
+    document.getElementById('auth-passphrase').value = ''
+    updateAuthUI()
+  } else {
+    showResult('auth-result', 'Incorrect passphrase', true)
+  }
+})
+
+// Auth prompt modal (when tx needs authorization)
+var pendingAuthResolve = null
+
+function showAuthPrompt (desc, amount, proposalId) {
+  document.getElementById('auth-prompt-desc').textContent = desc
+  document.getElementById('auth-prompt-amount').textContent = '$' + amount + ' USDT'
+  document.getElementById('auth-prompt-input').value = ''
+  document.getElementById('auth-prompt-result').classList.add('hidden')
+  document.getElementById('auth-prompt-modal').classList.remove('hidden')
+  document.getElementById('auth-prompt-input').focus()
+  return new Promise(function (resolve) { pendingAuthResolve = resolve })
+}
+
+document.getElementById('auth-prompt-approve').addEventListener('click', async function () {
+  var pp = document.getElementById('auth-prompt-input').value
+  if (!pp) { showResult('auth-prompt-result', 'Enter passphrase', true); return }
+  var result = await apiPost('/api/auth/verify', { passphrase: pp })
+  if (result && result.valid) {
+    showResult('auth-prompt-result', '✓ Authorized', false)
+    setTimeout(function () { document.getElementById('auth-prompt-modal').classList.add('hidden') }, 500)
+    if (pendingAuthResolve) pendingAuthResolve(true)
+  } else {
+    showResult('auth-prompt-result', '✗ Invalid passphrase', true)
+    if (pendingAuthResolve) pendingAuthResolve(false)
+  }
+})
+
+document.getElementById('auth-prompt-reject').addEventListener('click', function () {
+  document.getElementById('auth-prompt-modal').classList.add('hidden')
+  if (pendingAuthResolve) pendingAuthResolve(false)
+})
+
+// Poll for pending auth requests (from companion/MCP/autonomy)
+setInterval(async function () {
+  var data = await api('/api/auth/pending')
+  if (data && data.pending && data.pending.length > 0) {
+    var p = data.pending[0]
+    showAuthPrompt(p.description, p.amount, p.proposalId).then(async function (approved) {
+      if (approved) {
+        var pp = document.getElementById('auth-prompt-input').value
+        await apiPost('/api/auth/pending/' + p.proposalId + '/resolve', { passphrase: pp })
+      }
+    })
+  }
+}, 3000)
+
 /* ═══ UPDATE DISPATCHER ═══ */
 async function updateCurrentView () {
   switch (currentView) {
     case 'feed': await updateFeed(); break
     case 'wealth': await updateWealth(); break
     case 'swarm': await updateSwarm(); break
-    case 'policies': await updatePolicies(); break
+    case 'policies': await updatePolicies(); await updateAuthUI(); break
   }
   await updateChat()
 }

@@ -569,6 +569,32 @@
         </div>
         <div id="pol-strategies"><div class="empty">No strategies loaded. Add one to guide your agent's behavior.</div></div>
 
+        <!-- AUTHORIZATION -->
+        <div class="section" style="margin-top:1.25rem;">
+          <span class="section-title">Authorization</span>
+          <span class="section-line"></span>
+        </div>
+        <div class="card" id="auth-section">
+          <div class="card-title">Passphrase Auth <span class="badge" id="auth-badge" style="color:var(--dim);">Disabled</span></div>
+          <div id="auth-content">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:0.75rem;">
+              Require a passphrase for high-value transactions. The passphrase never reaches the LLM — it's verified locally.
+            </div>
+            <div id="auth-setup-form">
+              <div class="form-group"><label class="form-label">Passphrase</label><input class="form-input" id="auth-passphrase" type="password" placeholder="Min 4 characters" /></div>
+              <div style="display:flex;gap:0.4rem;">
+                <div class="form-group" style="flex:1;"><label class="form-label">Threshold (USDT)</label><input class="form-input" id="auth-threshold" type="number" value="100" /></div>
+                <div class="form-group" style="flex:1;"><label class="form-label">Timeout (min)</label><input class="form-input" id="auth-timeout" type="number" value="15" /></div>
+              </div>
+              <div style="display:flex;gap:0.5rem;">
+                <button class="btn btn-primary btn-sm" id="auth-enable-btn">Enable</button>
+                <button class="btn btn-sm hidden" id="auth-disable-btn">Disable</button>
+              </div>
+              <div class="sim-result hidden" id="auth-result" style="margin-top:0.4rem;"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- CAPABILITIES (collapsed modules) -->
         <div class="pol-capabilities" id="pol-modules-wrap">
           <span class="pol-cap-label" id="pol-cap-toggle" style="cursor:pointer;">Capabilities <span id="pol-mod-count">0</span> modules</span>
@@ -616,6 +642,21 @@
       <textarea class="chat-input" id="chat-input" placeholder="Type instruction..." rows="3"></textarea>
       <button class="chat-send" id="chat-send">Send</button>
     </div>
+  </div>
+</div>
+
+<!-- Auth Prompt Modal (global — appears on any tab when auth is needed) -->
+<div class="modal-overlay hidden" id="auth-prompt-modal">
+  <div class="modal" style="width:380px;">
+    <div class="modal-title" style="color:var(--brand-yellow);">🔒 Authorization Required</div>
+    <div id="auth-prompt-desc" style="font-size:12px;color:var(--muted);margin-bottom:0.75rem;"></div>
+    <div id="auth-prompt-amount" style="font-size:20px;font-weight:800;margin-bottom:0.75rem;"></div>
+    <div class="form-group"><input class="form-input" id="auth-prompt-input" type="password" placeholder="Enter passphrase" autofocus /></div>
+    <div style="display:flex;gap:0.5rem;">
+      <button class="btn btn-primary" id="auth-prompt-approve" style="background:var(--green);border-color:var(--green);color:#fff;">Authorize</button>
+      <button class="btn" id="auth-prompt-reject" style="color:var(--red);border-color:var(--red);">Reject</button>
+    </div>
+    <div class="sim-result hidden" id="auth-prompt-result" style="margin-top:0.4rem;"></div>
   </div>
 </div>
 

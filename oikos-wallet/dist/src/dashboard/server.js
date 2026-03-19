@@ -687,6 +687,131 @@ export function createDashboard(services, port, host = '127.0.0.1') {
             res.status(502).json({ error: `Brain error: ${msg}` });
         }
     });
+    // ── Passphrase Auth API ──
+    app.get('/api/auth/status', (_req, res) => {
+        res.json(services.auth ? services.auth.getStatus() : { enabled: false });
+    });
+    app.post('/api/auth/setup', (req, res) => {
+        if (!services.auth) {
+            res.json({ success: false, error: 'Auth module not loaded' });
+            return;
+        }
+        const { passphrase, threshold, timeoutMinutes } = req.body;
+        if (!passphrase) {
+            res.json({ success: false, error: 'Passphrase required' });
+            return;
+        }
+        const ok = services.auth.setup(passphrase, { threshold, timeoutMinutes });
+        res.json({ success: ok, error: ok ? undefined : 'Passphrase too short (min 4 chars)' });
+    });
+    app.post('/api/auth/verify', (req, res) => {
+        if (!services.auth) {
+            res.json({ valid: true });
+            return;
+        }
+        const { passphrase } = req.body;
+        if (!passphrase) {
+            res.json({ valid: false, error: 'Passphrase required' });
+            return;
+        }
+        const valid = services.auth.verify(passphrase);
+        const status = services.auth.getStatus();
+        res.json({ valid, expiresAt: valid ? status.expiresAt : null });
+    });
+    app.post('/api/auth/change', (req, res) => {
+        if (!services.auth) {
+            res.json({ success: false });
+            return;
+        }
+        const { currentPassphrase, newPassphrase } = req.body;
+        if (!currentPassphrase || !newPassphrase) {
+            res.json({ success: false, error: 'Both passphrases required' });
+            return;
+        }
+        const ok = services.auth.change(currentPassphrase, newPassphrase);
+        res.json({ success: ok, error: ok ? undefined : 'Current passphrase incorrect or new too short' });
+    });
+    app.post('/api/auth/disable', (req, res) => {
+        if (!services.auth) {
+            res.json({ success: false });
+            return;
+        }
+        const { passphrase } = req.body;
+        if (!passphrase) {
+            res.json({ success: false, error: 'Passphrase required' });
+            return;
+        }
+        const ok = services.auth.disable(passphrase);
+        res.json({ success: ok, error: ok ? undefined : 'Incorrect passphrase' });
+    });
+    app.post('/api/auth/settings', (req, res) => {
+        if (!services.auth) {
+            res.json({ success: false });
+            return;
+        }
+        const { threshold, timeoutMinutes, requireForPolicyChanges, requireForStrategyActivation } = req.body;
+        services.auth.updateSettings({ threshold, timeoutMinutes, requireForPolicyChanges, requireForStrategyActivation });
+        res.json({ success: true });
+    });
+    /** Browser auth page — for Telegram/Discord/remote authorization */
+    app.get('/auth/:proposalId', (req, res) => {
+        if (!services.auth) {
+            res.status(404).send('Auth not enabled');
+            return;
+        }
+        const pending = services.auth.getPending(req.params.proposalId);
+        if (!pending) {
+            res.status(404).send('Authorization request not found or expired');
+            return;
+        }
+        if (pending.resolved) {
+            res.send('This authorization has already been resolved.');
+            return;
+        }
+        // Serve a simple auth page
+        res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Oikos — Authorize</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:monospace;background:#1c1c20;color:#e4e0d8;display:flex;justify-content:center;align-items:center;min-height:100vh}
+.card{background:#2a2a2f;border:2px solid #6a6a70;padding:2rem;max-width:400px;width:90%}.title{font-size:16px;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:1.5rem;color:#ebb743}
+.detail{font-size:13px;color:#a09a90;margin-bottom:0.5rem}.amount{font-size:24px;font-weight:800;margin:1rem 0}
+input{width:100%;background:#1c1c20;border:2px solid #6a6a70;padding:0.6rem;font-family:inherit;font-size:14px;color:#e4e0d8;margin:1rem 0;outline:none}
+input:focus{border-color:#60a5fa}button{padding:0.6rem 1.2rem;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border:2px solid #6a6a70;text-transform:uppercase;letter-spacing:0.05em;margin-right:0.5rem}
+.approve{background:#2d8a4e;color:#fff;border-color:#2d8a4e}.reject{background:#2a2a2f;color:#f87171;border-color:#f87171}
+.result{margin-top:1rem;padding:0.5rem;font-size:12px;display:none}</style></head><body>
+<div class="card"><div class="title">Authorize Transaction</div>
+<div class="detail">${pending.description}</div>
+<div class="amount">$${pending.amount.toFixed(2)} USDT</div>
+<div class="detail">Expires: ${new Date(pending.expiresAt).toLocaleTimeString()}</div>
+<input type="password" id="pp" placeholder="Enter passphrase" autofocus />
+<div><button class="approve" onclick="auth(true)">Authorize</button><button class="reject" onclick="auth(false)">Reject</button></div>
+<div class="result" id="result"></div></div>
+<script>async function auth(approve){var pp=document.getElementById('pp').value;var r=document.getElementById('result');r.style.display='block';
+if(!approve){r.textContent='Rejected.';r.style.color='#f87171';return}
+try{var res=await fetch('/api/auth/pending/${pending.proposalId}/resolve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({passphrase:pp})});
+var data=await res.json();if(data.approved){r.textContent='✓ Authorized! You can close this page.';r.style.color='#4ade80'}else{r.textContent='✗ Invalid passphrase.';r.style.color='#f87171'}}
+catch(e){r.textContent='Error: '+e.message;r.style.color='#f87171'}}</script></body></html>`);
+    });
+    /** Resolve a pending auth via browser */
+    app.post('/api/auth/pending/:proposalId/resolve', (req, res) => {
+        if (!services.auth) {
+            res.json({ approved: false });
+            return;
+        }
+        const { passphrase } = req.body;
+        if (!passphrase) {
+            res.json({ approved: false, error: 'Passphrase required' });
+            return;
+        }
+        const approved = services.auth.resolvePending(req.params.proposalId, passphrase);
+        res.json({ approved });
+    });
+    /** Get pending auth requests (for Pear app to poll) */
+    app.get('/api/auth/pending', (_req, res) => {
+        if (!services.auth) {
+            res.json({ pending: [] });
+            return;
+        }
+        res.json({ pending: services.auth.getPendingList() });
+    });
     /** Health check — unauthenticated */
     app.get('/api/health', (_req, res) => {
         res.json({
