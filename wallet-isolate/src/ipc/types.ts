@@ -291,13 +291,14 @@ export interface AuditEntry {
 // ── Validation ──
 
 const VALID_SYMBOLS: ReadonlySet<string> = new Set(['USDT', 'BTC', 'XAUT', 'USAT', 'ETH', 'RGB']);
-const VALID_CHAINS: ReadonlySet<string> = new Set(['ethereum', 'polygon', 'bitcoin', 'arbitrum', 'rgb']);
+const VALID_CHAINS: ReadonlySet<string> = new Set(['ethereum', 'polygon', 'bitcoin', 'arbitrum', 'rgb', 'spark']);
 const VALID_REQUEST_TYPES: ReadonlySet<string> = new Set([
   'propose_payment', 'propose_swap', 'propose_bridge', 'propose_yield', 'propose_feedback',
   'propose_rgb_issue', 'propose_rgb_transfer',
   'identity_register', 'identity_set_wallet',
   'query_balance', 'query_balance_all', 'query_address', 'query_policy', 'query_audit', 'query_reputation',
   'query_rgb_assets', 'query_policy_check',
+  'spark_create_invoice', 'spark_pay_invoice', 'spark_deposit_address',
 ]);
 const VALID_YIELD_ACTIONS: ReadonlySet<string> = new Set(['deposit', 'withdraw']);
 

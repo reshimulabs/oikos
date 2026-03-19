@@ -49,6 +49,8 @@ function getTokenAddress(chain, symbol) {
 export class WalletManager {
     wdk = null;
     sparkManager = null;
+    sparkAccount = null; // cached at init
+    sparkAddress = ''; // cached at init — Spark getAddress() is slow
     initialized = false;
     rpcUrls = new Map();
     /**
@@ -93,7 +95,25 @@ export class WalletManager {
                     if (config.sparkScanApiKey)
                         sparkConfig.sparkScanApiKey = config.sparkScanApiKey;
                     this.sparkManager = new WalletManagerSpark(seed, sparkConfig);
-                    console.log(`[wallet-isolate] Spark wallet initialized (${config.network || 'MAINNET'})`);
+                    // Cache account + address at init time — Spark calls are slow over gRPC
+                    try {
+                        this.sparkAccount = await this.sparkManager.getAccount(0);
+                        const rawAddr = await this.sparkAccount.getAddress();
+                        // Normalize address format
+                        if (typeof rawAddr === 'string')
+                            this.sparkAddress = rawAddr;
+                        else if (rawAddr && typeof rawAddr === 'object') {
+                            const a = rawAddr;
+                            this.sparkAddress = (typeof a.address === 'string' ? a.address : typeof a.sparkAddress === 'string' ? a.sparkAddress : String(rawAddr));
+                        }
+                        else {
+                            this.sparkAddress = String(rawAddr);
+                        }
+                        console.log(`[wallet-isolate] Spark wallet initialized (${config.network || 'MAINNET'}) addr: ${this.sparkAddress.slice(0, 20)}...`);
+                    }
+                    catch (accErr) {
+                        console.error('[wallet-isolate] Spark getAccount failed:', accErr instanceof Error ? accErr.message : accErr);
+                    }
                 }
                 catch (err) {
                     console.error('[wallet-isolate] Spark init failed:', err instanceof Error ? err.message : err);
@@ -105,19 +125,10 @@ export class WalletManager {
     }
     async getAddress(chain) {
         if (chain === 'spark') {
-            const sparkAccount = await this.getSparkAccount();
-            const addr = await sparkAccount.getAddress();
-            // Normalize: Spark may return string, or object with .address or .sparkAddress
-            if (typeof addr === 'string')
-                return addr;
-            if (addr && typeof addr === 'object') {
-                const a = addr;
-                if (typeof a.address === 'string')
-                    return a.address;
-                if (typeof a.sparkAddress === 'string')
-                    return a.sparkAddress;
-            }
-            return String(addr);
+            // Return cached address (resolved at init time — Spark getAddress() is slow)
+            if (this.sparkAddress)
+                return this.sparkAddress;
+            throw new Error('Spark wallet not initialized or address not available');
         }
         const account = await this.getAccount(chain);
         return account.getAddress();
@@ -470,13 +481,17 @@ export class WalletManager {
         return sparkAccount.getStaticDepositAddress();
     }
     // ── Private Helpers ──
-    /** Get the Spark account (separate from WDK core). */
+    /** Get the Spark account (cached at init time for performance). */
     async getSparkAccount() {
         this.ensureInitialized();
+        if (this.sparkAccount)
+            return this.sparkAccount;
         if (!this.sparkManager) {
             throw new Error('Spark wallet not initialized. Add spark chain to config.');
         }
-        return this.sparkManager.getAccount(0);
+        // Fallback: create account if not cached (shouldn't happen)
+        this.sparkAccount = await this.sparkManager.getAccount(0);
+        return this.sparkAccount;
     }
     /** Get the WDK account for a given chain. */
     async getAccount(chain) {

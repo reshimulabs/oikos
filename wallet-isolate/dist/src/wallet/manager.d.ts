@@ -13,6 +13,8 @@ import type { ChainConfig, WalletBalance, TransactionResult, WalletOperations, I
 export declare class WalletManager implements WalletOperations {
     private wdk;
     private sparkManager;
+    private sparkAccount;
+    private sparkAddress;
     private initialized;
     private rpcUrls;
     /**
@@ -95,7 +97,7 @@ export declare class WalletManager implements WalletOperations {
     sparkPayInvoice(encodedInvoice: string, maxFeeSats?: number): Promise<TransactionResult>;
     /** Get a deposit address for bridging BTC L1 → Spark L2. */
     sparkGetDepositAddress(): Promise<string>;
-    /** Get the Spark account (separate from WDK core). */
+    /** Get the Spark account (cached at init time for performance). */
     private getSparkAccount;
     /** Get the WDK account for a given chain. */
     private getAccount;
