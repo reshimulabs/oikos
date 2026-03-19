@@ -101,7 +101,15 @@ export interface ReputationQuery {
     agentId: string;
     chain: Chain;
 }
-export type IPCRequestType = 'propose_payment' | 'propose_swap' | 'propose_bridge' | 'propose_yield' | 'propose_feedback' | 'propose_rgb_issue' | 'propose_rgb_transfer' | 'identity_register' | 'identity_set_wallet' | 'query_balance' | 'query_balance_all' | 'query_address' | 'query_policy' | 'query_audit' | 'query_reputation' | 'query_rgb_assets' | 'query_policy_check';
+export interface SparkInvoiceRequest {
+    amountSats?: number;
+    memo?: string;
+}
+export interface SparkPayInvoiceRequest {
+    encodedInvoice: string;
+    maxFeeSats?: number;
+}
+export type IPCRequestType = 'propose_payment' | 'propose_swap' | 'propose_bridge' | 'propose_yield' | 'propose_feedback' | 'propose_rgb_issue' | 'propose_rgb_transfer' | 'identity_register' | 'identity_set_wallet' | 'query_balance' | 'query_balance_all' | 'query_address' | 'query_policy' | 'query_audit' | 'query_reputation' | 'query_rgb_assets' | 'query_policy_check' | 'spark_create_invoice' | 'spark_pay_invoice' | 'spark_deposit_address';
 /** Dry-run policy check result — evaluate without executing or recording */
 export interface PolicyCheckResult {
     wouldApprove: boolean;
@@ -112,7 +120,7 @@ export interface IPCRequest {
     id: string;
     type: IPCRequestType;
     source?: ProposalSource;
-    payload: PaymentProposal | SwapProposal | BridgeProposal | YieldProposal | FeedbackProposal | RGBIssueProposal | RGBTransferProposal | IdentityRegisterRequest | IdentitySetWalletRequest | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery | ReputationQuery;
+    payload: PaymentProposal | SwapProposal | BridgeProposal | YieldProposal | FeedbackProposal | RGBIssueProposal | RGBTransferProposal | IdentityRegisterRequest | IdentitySetWalletRequest | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery | ReputationQuery | SparkInvoiceRequest | SparkPayInvoiceRequest;
 }
 export interface ExecutionResult {
     status: 'executed' | 'rejected' | 'failed';
@@ -157,11 +165,11 @@ export interface ReputationResult {
     totalValue: string;
     valueDecimals: number;
 }
-export type IPCResponseType = 'execution_result' | 'balance' | 'balance_all' | 'address' | 'policy_status' | 'audit_entries' | 'identity_result' | 'reputation_result' | 'rgb_assets' | 'policy_check' | 'error';
+export type IPCResponseType = 'execution_result' | 'balance' | 'balance_all' | 'address' | 'policy_status' | 'audit_entries' | 'identity_result' | 'reputation_result' | 'rgb_assets' | 'policy_check' | 'spark_invoice' | 'spark_pay_result' | 'spark_deposit' | 'error';
 export interface IPCResponse {
     id: string;
     type: IPCResponseType;
-    payload: ExecutionResult | BalanceResponse | BalanceResponse[] | AddressResponse | PolicyStatusResponse | AuditEntryResponse | IdentityResult | ReputationResult | RGBAssetInfo[] | PolicyCheckResult | {
+    payload: ExecutionResult | BalanceResponse | BalanceResponse[] | AddressResponse | PolicyStatusResponse | AuditEntryResponse | IdentityResult | ReputationResult | RGBAssetInfo[] | PolicyCheckResult | Record<string, unknown> | {
         message: string;
     };
 }

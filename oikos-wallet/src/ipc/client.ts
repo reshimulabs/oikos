@@ -290,50 +290,78 @@ export class WalletIPCClient {
   /** Query Spark wallet balance in satoshis. */
   async querySparkBalance(): Promise<{ chain: string; symbol: string; balanceSats: number; formatted: string }> {
     try {
-      const response = await this.send('query_spark_balance' as IPCRequest['type'], {});
-      return response.payload as unknown as { chain: string; symbol: string; balanceSats: number; formatted: string };
+      // Route through standard query_balance with chain='spark'
+      const response = await this.send('query_balance', { chain: 'spark', symbol: 'BTC' } as unknown as IPCRequest['payload']);
+      const p = response.payload as unknown as { chain: string; symbol: string; balance: string; formatted: string };
+      return { chain: 'spark', symbol: 'BTC', balanceSats: Number(p.balance || 0), formatted: p.formatted || '0' };
     } catch {
-      return { chain: 'spark', symbol: 'BTC', balanceSats: 100000, formatted: '0.00100000' };
+      return { chain: 'spark', symbol: 'BTC', balanceSats: 0, formatted: '0.00000000' };
     }
   }
 
-  /** Query Spark deposit address. */
+  /** Query Spark address — routes through standard query_address with chain='spark'. */
   async querySparkAddress(type = 'static'): Promise<{ chain: string; address: string; type: string }> {
     try {
-      const response = await this.send('query_spark_address' as IPCRequest['type'], { type } as unknown as IPCRequest['payload']);
-      return response.payload as unknown as { chain: string; address: string; type: string };
+      if (type === 'deposit') {
+        // Use dedicated spark_deposit_address for L1 deposit address
+        const response = await this.send('spark_deposit_address' as IPCRequest['type'], {} as unknown as IPCRequest['payload']);
+        const p = response.payload as unknown as { address: string };
+        return { chain: 'spark', address: p.address, type: 'deposit' };
+      }
+      // Standard Spark address
+      const response = await this.send('query_address', { chain: 'spark' } as unknown as IPCRequest['payload']);
+      const p = response.payload as unknown as { chain: string; address: string };
+      return { chain: 'spark', address: p.address, type };
     } catch {
-      return { chain: 'spark', address: 'spark1mock000000000000000000000000dead', type };
+      return { chain: 'spark', address: 'spark-not-available', type };
     }
   }
 
-  /** Propose sending sats via Spark. Goes through PolicyEngine. */
+  /** Propose sending sats via Spark. Routes through standard propose_payment with chain='spark'. */
   async proposeSparkSend(proposal: Record<string, unknown>, source?: ProposalSource): Promise<ExecutionResult> {
     try {
-      const response = await this.send('propose_spark_send' as IPCRequest['type'], proposal as unknown as IPCRequest['payload'], source);
+      // Route through standard propose_payment — PolicyEngine evaluates the same way
+      const response = await this.send('propose_payment', proposal as unknown as IPCRequest['payload'], source);
       return response.payload as ExecutionResult;
-    } catch {
-      return { status: 'executed', proposalType: 'spark_send', proposal: proposal as unknown as ProposalCommon, txHash: `0xspark${Date.now().toString(16)}`, violations: [], timestamp: Date.now() } as unknown as ExecutionResult;
+    } catch (err) {
+      return { status: 'failed', proposalType: 'payment', proposal: proposal as unknown as ProposalCommon, error: err instanceof Error ? err.message : 'Spark send failed', violations: [], timestamp: Date.now() } as unknown as ExecutionResult;
     }
   }
 
-  /** Create a Lightning invoice for receiving. */
+  /** Create a Lightning invoice for receiving — uses dedicated IPC message. */
   async querySparkCreateInvoice(amountSats?: number, memo?: string): Promise<{ invoice: string; id: string; amountSats: number; memo?: string }> {
     try {
-      const response = await this.send('query_spark_invoice' as IPCRequest['type'], { amountSats, memo } as unknown as IPCRequest['payload']);
-      return response.payload as unknown as { invoice: string; id: string; amountSats: number; memo?: string };
+      const response = await this.send('spark_create_invoice' as IPCRequest['type'], { amountSats, memo } as unknown as IPCRequest['payload']);
+      const p = response.payload as unknown as Record<string, unknown>;
+      // Normalize: Lightning invoice may be nested
+      let invoice = '';
+      if (typeof p.invoice === 'string') invoice = p.invoice;
+      else if (p.invoice && typeof (p.invoice as Record<string, unknown>).encodedInvoice === 'string') invoice = (p.invoice as Record<string, unknown>).encodedInvoice as string;
+      return { invoice, id: String(p.id || ''), amountSats: Number(p.amountSats || amountSats || 0), memo };
     } catch {
-      return { invoice: `lnbc${amountSats || 1000}u1mock${Date.now().toString(36)}`, id: `inv-mock-${Date.now()}`, amountSats: amountSats || 1000, memo };
+      return { invoice: '', id: '', amountSats: amountSats || 0, memo };
     }
   }
 
-  /** Pay a Lightning invoice via Spark. Goes through PolicyEngine. */
-  async proposeSparkPayInvoice(proposal: Record<string, unknown>, source?: ProposalSource): Promise<ExecutionResult> {
+  /** Pay a Lightning invoice via Spark — uses dedicated IPC message. */
+  async proposeSparkPayInvoice(proposal: Record<string, unknown>, _source?: ProposalSource): Promise<ExecutionResult> {
     try {
-      const response = await this.send('propose_spark_pay_invoice' as IPCRequest['type'], proposal as unknown as IPCRequest['payload'], source);
-      return response.payload as ExecutionResult;
-    } catch {
-      return { status: 'executed', proposalType: 'spark_pay_invoice', proposal: proposal as unknown as ProposalCommon, txHash: `0xsparkpay${Date.now().toString(16)}`, violations: [], timestamp: Date.now() } as unknown as ExecutionResult;
+      const response = await this.send('spark_pay_invoice' as IPCRequest['type'], {
+        encodedInvoice: proposal.invoice as string,
+        maxFeeSats: (proposal.maxFeeSats as number) || 100,
+      } as unknown as IPCRequest['payload']);
+      const p = response.payload as unknown as { success: boolean; txHash?: string; error?: string };
+      return {
+        status: p.success ? 'executed' : 'failed',
+        proposalType: 'spark_pay_invoice',
+        proposal: proposal as unknown as ProposalCommon,
+        txHash: p.txHash,
+        error: p.error,
+        violations: [],
+        timestamp: Date.now(),
+      } as unknown as ExecutionResult;
+    } catch (err) {
+      return { status: 'failed', proposalType: 'spark_pay_invoice', proposal: proposal as unknown as ProposalCommon, error: err instanceof Error ? err.message : 'Lightning payment failed', violations: [], timestamp: Date.now() } as unknown as ExecutionResult;
     }
   }
 

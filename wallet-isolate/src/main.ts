@@ -31,7 +31,25 @@ import type {
   IdentityRegisterRequest,
   IdentitySetWalletRequest,
   ReputationQuery,
+  SparkInvoiceRequest,
+  SparkPayInvoiceRequest,
 } from './ipc/types.js';
+
+/** BigInt-safe JSON serializer — WDK Spark returns BigInt values that break JSON.stringify */
+function jsonSafe(obj: unknown): unknown {
+  if (obj === null || obj === undefined) return obj;
+  if (typeof obj === 'bigint') return Number(obj);
+  if (obj instanceof Date) return obj.toISOString();
+  if (Array.isArray(obj)) return obj.map(jsonSafe);
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      result[key] = jsonSafe(value);
+    }
+    return result;
+  }
+  return obj;
+}
 import { PolicyEngine } from './policies/engine.js';
 import type { PolicyConfig } from './policies/types.js';
 import { ProposalExecutor } from './executor/executor.js';
@@ -250,6 +268,55 @@ async function handleRequest(
             id: request.id,
             type: 'rgb_assets',
             payload: assets,
+          };
+          break;
+        }
+
+        // ── Spark/Lightning Operations ──
+
+        case 'spark_create_invoice': {
+          const req = request.payload as SparkInvoiceRequest;
+          const mgr = wallet as WalletManager;
+          if (typeof mgr.sparkCreateInvoice !== 'function') {
+            response = { id: request.id, type: 'error', payload: { message: 'Spark wallet not available' } };
+            break;
+          }
+          const invoice = await mgr.sparkCreateInvoice(req.amountSats, req.memo);
+          response = {
+            id: request.id,
+            type: 'spark_invoice',
+            payload: jsonSafe(invoice) as Record<string, unknown>,
+          };
+          break;
+        }
+
+        case 'spark_pay_invoice': {
+          const req = request.payload as SparkPayInvoiceRequest;
+          const mgr = wallet as WalletManager;
+          if (typeof mgr.sparkPayInvoice !== 'function') {
+            response = { id: request.id, type: 'error', payload: { message: 'Spark wallet not available' } };
+            break;
+          }
+          const result = await mgr.sparkPayInvoice(req.encodedInvoice, req.maxFeeSats);
+          response = {
+            id: request.id,
+            type: 'spark_pay_result',
+            payload: jsonSafe(result) as Record<string, unknown>,
+          };
+          break;
+        }
+
+        case 'spark_deposit_address': {
+          const mgr = wallet as WalletManager;
+          if (typeof mgr.sparkGetDepositAddress !== 'function') {
+            response = { id: request.id, type: 'error', payload: { message: 'Spark wallet not available' } };
+            break;
+          }
+          const addr = await mgr.sparkGetDepositAddress();
+          response = {
+            id: request.id,
+            type: 'spark_deposit',
+            payload: { address: typeof addr === 'string' ? addr : String(addr) },
           };
           break;
         }

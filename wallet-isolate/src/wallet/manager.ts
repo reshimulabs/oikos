@@ -175,7 +175,15 @@ export class WalletManager implements WalletOperations {
   async getAddress(chain: Chain): Promise<string> {
     if (chain === 'spark') {
       const sparkAccount = await this.getSparkAccount();
-      return sparkAccount.getAddress() as unknown as string;
+      const addr = await sparkAccount.getAddress();
+      // Normalize: Spark may return string, or object with .address or .sparkAddress
+      if (typeof addr === 'string') return addr;
+      if (addr && typeof addr === 'object') {
+        const a = addr as Record<string, unknown>;
+        if (typeof a.address === 'string') return a.address;
+        if (typeof a.sparkAddress === 'string') return a.sparkAddress;
+      }
+      return String(addr);
     }
     const account = await this.getAccount(chain);
     return account.getAddress();

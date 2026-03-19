@@ -136,6 +136,18 @@ export interface ReputationQuery {
 
 // ── IPC Request Envelope ──
 
+// ── Spark/Lightning Query Types ──
+
+export interface SparkInvoiceRequest {
+  amountSats?: number;
+  memo?: string;
+}
+
+export interface SparkPayInvoiceRequest {
+  encodedInvoice: string;
+  maxFeeSats?: number;
+}
+
 export type IPCRequestType =
   | 'propose_payment'
   | 'propose_swap'
@@ -153,7 +165,10 @@ export type IPCRequestType =
   | 'query_audit'
   | 'query_reputation'
   | 'query_rgb_assets'
-  | 'query_policy_check';
+  | 'query_policy_check'
+  | 'spark_create_invoice'
+  | 'spark_pay_invoice'
+  | 'spark_deposit_address';
 
 /** Dry-run policy check result — evaluate without executing or recording */
 export interface PolicyCheckResult {
@@ -169,7 +184,8 @@ export interface IPCRequest {
   payload: PaymentProposal | SwapProposal | BridgeProposal | YieldProposal | FeedbackProposal
     | RGBIssueProposal | RGBTransferProposal
     | IdentityRegisterRequest | IdentitySetWalletRequest
-    | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery | ReputationQuery;
+    | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery | ReputationQuery
+    | SparkInvoiceRequest | SparkPayInvoiceRequest;
 }
 
 // ── Wallet → Brain Responses ──
@@ -235,6 +251,9 @@ export type IPCResponseType =
   | 'reputation_result'
   | 'rgb_assets'
   | 'policy_check'
+  | 'spark_invoice'
+  | 'spark_pay_result'
+  | 'spark_deposit'
   | 'error';
 
 export interface IPCResponse {
@@ -251,6 +270,7 @@ export interface IPCResponse {
     | ReputationResult
     | RGBAssetInfo[]
     | PolicyCheckResult
+    | Record<string, unknown>  // Spark and extensible responses
     | { message: string };
 }
 
