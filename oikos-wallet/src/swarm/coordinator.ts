@@ -72,6 +72,11 @@ export class SwarmCoordinator implements SwarmCoordinatorInterface {
     this.marketplace = new Marketplace();
   }
 
+  /** Expose underlying Hyperswarm instance for companion to reuse */
+  getHyperswarm(): unknown {
+    return this.discovery?.getSwarmInstance() ?? null;
+  }
+
   /** Start the swarm: generate identity, join board, begin heartbeat */
   async start(): Promise<void> {
     if (this.started) return;

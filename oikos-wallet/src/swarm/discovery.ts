@@ -45,6 +45,8 @@ type DisconnectHandler = (remotePubkey: Buffer) => void;
 
 export class SwarmDiscovery {
   private swarm: Hyperswarm;
+  /** Expose Hyperswarm instance for companion to reuse (same UDP socket, same DHT) */
+  getSwarmInstance(): Hyperswarm { return this.swarm; }
   private config: DiscoveryConfig;
   private boardTopic: Buffer;
   private boardDiscovery: unknown | null = null;

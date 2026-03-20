@@ -104,30 +104,38 @@ export class CompanionCoordinator {
   async start(): Promise<void> {
     if (this.started) return;
 
-    const { loadOrCreateKeypair } = await import('../swarm/identity.js');
-    const keypair = loadOrCreateKeypair(this.config.keypairPath);
+    // Try to reuse the swarm's Hyperswarm instance (same UDP socket, same DHT connection)
+    // This avoids opening a second UDP port which may be blocked by Docker/NAT
+    const swarmHyperswarm = this.swarm && typeof (this.swarm as unknown as { getHyperswarm?: () => Hyperswarm | null }).getHyperswarm === 'function'
+      ? (this.swarm as unknown as { getHyperswarm(): Hyperswarm | null }).getHyperswarm()
+      : null;
 
-    const opts: Record<string, unknown> = { keyPair: keypair };
-    if (this.config.dht) opts['dht'] = this.config.dht;
-    if (this.config.relayPubkey) {
-      try {
-        const relayBuf = Buffer.from(this.config.relayPubkey, 'hex');
-        // Force relay on every attempt (function form, not raw buffer)
-        // Raw buffer only relays when force=true or dht.randomized=true
-        // Docker NAT triggers neither — connections silently hang
-        opts['relayThrough'] = () => relayBuf;
-      } catch { /* invalid relay pubkey, skip */ }
-    }
+    if (swarmHyperswarm) {
+      console.error('[companion] Reusing swarm Hyperswarm instance (shared UDP socket)');
+      this.hyperswarm = swarmHyperswarm;
+    } else {
+      const { loadOrCreateKeypair } = await import('../swarm/identity.js');
+      const keypair = loadOrCreateKeypair(this.config.keypairPath);
 
-    this.hyperswarm = new Hyperswarm(opts);
+      const opts: Record<string, unknown> = { keyPair: keypair };
+      if (this.config.dht) opts['dht'] = this.config.dht;
+      if (this.config.relayPubkey) {
+        try {
+          const relayBuf = Buffer.from(this.config.relayPubkey, 'hex');
+          opts['relayThrough'] = () => relayBuf;
+        } catch { /* invalid relay pubkey, skip */ }
+      }
 
-    // Maintain persistent connection to relay node for bridging
-    if (this.config.relayPubkey) {
-      try {
-        const relayBuf = Buffer.from(this.config.relayPubkey, 'hex');
-        this.hyperswarm.joinPeer(relayBuf);
-        console.error(`[companion] Joined relay peer: ${this.config.relayPubkey.slice(0, 16)}...`);
-      } catch { /* relay join failed, non-fatal */ }
+      this.hyperswarm = new Hyperswarm(opts);
+
+      // Maintain persistent connection to relay node for bridging
+      if (this.config.relayPubkey) {
+        try {
+          const relayBuf = Buffer.from(this.config.relayPubkey, 'hex');
+          this.hyperswarm.joinPeer(relayBuf);
+          console.error(`[companion] Joined relay peer: ${this.config.relayPubkey.slice(0, 16)}...`);
+        } catch { /* relay join failed, non-fatal */ }
+      }
     }
 
     this.hyperswarm.on('connection', (socket: unknown) => {
