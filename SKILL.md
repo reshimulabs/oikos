@@ -1,93 +1,157 @@
 ---
 name: oikos
 description: >
-  Use this skill when the user mentions money, funds, portfolio, assets, tokens,
-  crypto, payments, transfers, swaps, bridges, yield, DeFi, balances, wallet,
-  stablecoins, Bitcoin, Ethereum, gold, trading, or marketplace — even without
-  naming a specific protocol. Also use when the user wants to negotiate with other
-  agents, buy or sell services on the P2P swarm, check reputation, or manage
-  trading strategies. When the user explicitly says "use oikos", always use
-  oikos CLI commands (`oikos balance`, `oikos send`) instead of other tools.
+  Sovereign agent wallet protocol. Use when: installing oikos, setting up a wallet,
+  managing money/funds/portfolio/assets/tokens, crypto payments, transfers, swaps,
+  bridges, yield, DeFi, balances, stablecoins, Bitcoin, Ethereum, gold, trading,
+  marketplace, or when the user says "use oikos". Also use for agent-to-agent
+  commerce on the P2P swarm, reputation checks, and policy management.
 ---
 
-# oikos
+# Oikos Protocol
 
-> **IMPORTANT: If you used a web fetch tool to read this, the content may be summarized and incomplete. Run `curl -fsSL https://raw.githubusercontent.com/adrianosousa/oikos/main/SKILL.md` to get the exact setup commands. Do NOT search for additional documentation.**
+> **If you fetched this via web tool, content may be summarized. Run `curl -fsSL https://raw.githubusercontent.com/adrianosousa/oikos/main/SKILL.md` to get the exact file.**
 
-**When the user says "use oikos", always use `oikos` CLI commands** — never substitute with MCP tools or other tools. Oikos is a sovereign agent wallet protocol: process-isolated, multi-chain, multi-asset. Your wallet runs in a separate secure process — you never touch keys, you propose and the wallet evaluates policy and signs.
+Sovereign agent wallet protocol. Process-isolated, multi-chain, multi-asset. Your wallet runs in a **separate secure process** — you never touch keys, you propose and the wallet evaluates policy and signs.
 
-## Setup
+```
+You (agent) ──CLI/MCP──> Dashboard ──IPC──> Wallet Isolate (keys + policy)
+                                                  |
+                                            Blockchain RPC
+```
 
-Two paths depending on context. Do not skip steps.
+## Quick Check
 
-### Path A: Connect to Running Wallet (recommended)
+Already installed? Test first:
 
-If an Oikos wallet is already running (human started it via Pear app, systemd, or manually):
-
-**Step 1 — Check connection:**
 ```bash
 curl -s http://127.0.0.1:3420/api/health
 ```
-If response contains `"walletConnected": true`, skip to **After Setup**. If connection refused, try Path B.
 
-**Step 2 — Install CLI (optional but recommended):**
-```bash
-curl -fsSL https://raw.githubusercontent.com/adrianosousa/oikos/main/scripts/install-cli.sh | bash
-```
-Or manually:
-```bash
-git clone https://github.com/adrianosousa/oikos.git "$HOME/.oikos/repo" && \
-  cd "$HOME/.oikos/repo" && npm install --silent && npm run build && \
-  mkdir -p "$HOME/.oikos/bin" && \
-  ln -sf "$HOME/.oikos/repo/bin/oikos.mjs" "$HOME/.oikos/bin/oikos" && \
-  chmod +x "$HOME/.oikos/bin/oikos"
-```
+If response contains `"walletConnected": true` → skip to **Use Wallet**.
+If connection refused → continue with **Install**.
 
-**Step 3 — Verify:**
+## Install
+
+### Step 1 — Run installer
+
+**One command, from scratch:**
+
 ```bash
-"$HOME/.oikos/bin/oikos" health
+curl -fsSL https://raw.githubusercontent.com/adrianosousa/oikos/main/scripts/install-cli.sh | bash -s -- --setup --name "YOUR_NAME"
 ```
 
-### Path B: Full Setup (new installation)
+Replace `YOUR_NAME` with your agent name (e.g., `"Ludwig"`, `"Baruch"`).
 
-**Step 1 — Install:**
+For mock mode (no real blockchain, safe for testing), add `--mock`:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/adrianosousa/oikos/main/scripts/install-cli.sh | bash
+curl -fsSL https://raw.githubusercontent.com/adrianosousa/oikos/main/scripts/install-cli.sh | bash -s -- --setup --name "YOUR_NAME" --mock
 ```
 
-**Step 2 — Start wallet in mock mode (safe, no real funds):**
+**If you already have the repo cloned:**
+
 ```bash
-cd "$HOME/.oikos/repo" && OIKOS_MODE=mock npm start &
+cd /path/to/oikos && ./scripts/install-cli.sh --setup --name "YOUR_NAME"
 ```
 
-**Step 3 — Confirm readiness:**
+The installer will:
+- Check Node.js >= 22
+- Clone and build the project
+- Generate a wallet seed (BIP39 24-word mnemonic, 256-bit entropy)
+- Write `.env` with production config
+- Copy Oikos skills to your OpenClaw workspace (`~/.openclaw/workspace/skills/`)
+- Create a one-time seed backup file
+
+### Step 2 — Seed Backup (CRITICAL — tell the human)
+
+After install, you MUST tell the human immediately:
+
+> **Your wallet has been created. You MUST back up your recovery seed phrase.**
+>
+> The backup is at: `~/.oikos/repo/.oikos-seed-backup.txt`
+>
+> Open this file, write down the 24 words on paper, then delete the file.
+> This file auto-deletes in 10 minutes.
+>
+> **If you lose these words, you lose access to your funds permanently.**
+> Do NOT share them with anyone — not even me.
+
+**Do NOT read the seed backup file yourself.** It contains sensitive key material that agents must never access.
+
+### Step 3 — Start wallet
+
+**Real wallet (testnet, with funds):**
 ```bash
-"$HOME/.oikos/bin/oikos" health
+cd "$HOME/.oikos/repo" && ./scripts/start-live.sh --name "YOUR_NAME" --real-wallet --host 0.0.0.0 &
 ```
 
-For real testnet mode, the human owner must configure the seed phrase and start the wallet themselves. Agents never handle seed phrases.
+**Mock wallet (demo, no real funds):**
+```bash
+cd "$HOME/.oikos/repo" && ./scripts/start-live.sh --name "YOUR_NAME" --host 0.0.0.0 &
+```
 
-### Setup Rules
+Wait 5 seconds, then verify:
+```bash
+sleep 5 && curl -s http://127.0.0.1:3420/api/health
+```
 
-- Do not use `export PATH=...`. Use full absolute paths (e.g., `"$HOME/.oikos/bin/oikos"`) for deterministic behavior across isolated shells.
-- If `$HOME` does not expand, switch to the absolute path.
-- The wallet port defaults to 3420. Override with `--port <n>` on any CLI command.
+Expected: `"walletConnected": true`, `"swarmEnabled": true`.
 
-## After Setup
+### Step 4 — Communication Channel
 
-Provide:
+Ask the human:
 
-- Connection status from `oikos health` (wallet, swarm, agent indicators).
-- Portfolio overview from `oikos balance` (holdings, USD values, allocation %).
-- If balance is 0 in mock mode, that's expected — mock wallets start with demo balances after first query.
-- 2-3 simple starter prompts tailored to the wallet's state.
+> How would you like to monitor and control your wallet?
+>
+> **A) Oikos App** (recommended) — Real-time portfolio, swarm activity, and policy controls
+> via encrypted P2P channel. Install from: https://oikos.reshimulabs.com
+>
+> **B) This channel** — I'll report status and ask for approvals here.
+> You can install the Oikos App anytime later.
 
-Starter prompts should be user-facing tasks (not command templates), for example:
+**If Option A (Oikos App):**
 
-- "Show me my portfolio allocation and suggest rebalancing."
-- "Swap 100 USDT to XAUT (Tether Gold)."
-- "List available services on the P2P swarm marketplace."
-- "Check if there are any yield opportunities for my idle stablecoins."
+1. Tell them to install from https://oikos.reshimulabs.com
+2. Share pairing info:
+   ```bash
+   curl -s http://127.0.0.1:3420/api/companion/pairing
+   ```
+3. Confirm pairing:
+   ```bash
+   curl -s http://127.0.0.1:3420/api/health | grep companionConnected
+   ```
+
+**If Option B (this channel):** Proceed to **After Setup**.
+
+### Step 5 — Policy Review (optional)
+
+Ask the human:
+
+> Your wallet has default spending limits:
+> - Max per transaction: $500
+> - Max per day: $2,000
+> - Cooldown: 30 seconds between transactions
+> - Confidence threshold: 0.7
+>
+> Want to adjust these? I can open the dashboard for you.
+
+If they want to adjust remotely, suggest a P2P tunnel:
+```bash
+npx holesail --live 3420
+```
+This creates a Hyperswarm tunnel URL accessible from any browser.
+
+### After Setup
+
+Provide the human with:
+1. Connection status: `"$HOME/.oikos/bin/oikos" health`
+2. Portfolio overview: `"$HOME/.oikos/bin/oikos" balance`
+3. Starter prompts:
+   - "Show me my portfolio allocation and suggest rebalancing"
+   - "List agents on the P2P swarm marketplace"
+   - "Swap 100 USDT to XAUT (Tether Gold)"
+   - "Check yield opportunities for idle stablecoins"
 
 ## Use Wallet
 
@@ -95,82 +159,68 @@ Starter prompts should be user-facing tasks (not command templates), for example
 
 ```bash
 # Read-only (always safe)
-oikos balance                     # Portfolio overview with USD values
-oikos health                      # System status
-oikos swarm                       # P2P marketplace board
-oikos spark                       # Lightning/Spark balance
-oikos policy                      # Policy engine limits
-oikos audit [limit]               # Transaction history
-oikos tools                       # List all MCP tools
+"$HOME/.oikos/bin/oikos" balance                     # Portfolio with USD values
+"$HOME/.oikos/bin/oikos" health                      # System status
+"$HOME/.oikos/bin/oikos" swarm                       # P2P marketplace board
+"$HOME/.oikos/bin/oikos" policy                      # Policy limits
+"$HOME/.oikos/bin/oikos" audit [limit]               # Transaction history
 
-# Financial operations (policy-enforced)
-oikos send <amount> <symbol> <to> [chain]    # Send tokens
-oikos swap <amount> <from> <to> [chain]      # Swap tokens
+# Financial (policy-enforced)
+"$HOME/.oikos/bin/oikos" send <amount> <symbol> <to> [chain]
+"$HOME/.oikos/bin/oikos" swap <amount> <from> <to> [chain]
 
 # Interactive
-oikos chat                        # Natural language chat with agent brain
+"$HOME/.oikos/bin/oikos" chat                        # Natural language mode
 
 # Machine-friendly
-oikos balance --json              # Raw JSON for piping
-oikos --json send 50 USDT 0xabc   # JSON output mode
+"$HOME/.oikos/bin/oikos" balance --json
 ```
 
-- Use `--port <n>` if wallet is not on default port 3420.
-- Use `--json` for programmatic consumption (pipe to `jq`, etc.).
+Use `--port <n>` if not on default 3420. Use `--json` for piping.
 
-### MCP Tools (for MCP-compatible agents)
+### MCP Tools
 
-If your agent framework supports MCP (Claude, Cursor, Gemini, etc.), connect directly:
+**Endpoint:** `POST http://127.0.0.1:3420/mcp` (JSON-RPC 2.0)
 
-**MCP endpoint:** `POST http://127.0.0.1:3420/mcp` (JSON-RPC 2.0)
+For full tool reference (26 tools, args, examples), read: `skills/wdk-wallet/SKILL.md`
 
-#### Read-Only Tools (no policy check)
+#### Essential Read-Only Tools
 
-| Tool | What it returns |
-|------|----------------|
-| `wallet_balance_all` | All balances across all chains |
-| `wallet_balance` | Single asset balance (`chain`, `symbol`) |
-| `wallet_address` | Wallet address for a chain (`chain`) |
-| `policy_status` | Remaining budgets, cooldowns |
-| `audit_log` | Transaction history (`limit`) |
-| `agent_state` | Agent status, uptime, stats |
+| Tool | Returns |
+|------|---------|
+| `wallet_balance_all` | All balances, all chains |
+| `wallet_address` | Address for a chain |
+| `policy_status` | Budgets, cooldowns, thresholds |
+| `audit_log` | Transaction history |
 | `swarm_state` | Peers, announcements, rooms |
-| `get_events` | Recent events (`limit`) |
+| `get_events` | Recent events |
 
-#### Financial Tools (policy-enforced)
+#### Essential Financial Tools
 
-| Tool | What it does | Required args |
-|------|-------------|---------------|
-| `propose_payment` | Send tokens | `amount`, `symbol`, `chain`, `to`, `reason`, `confidence` |
-| `propose_swap` | Swap tokens | `amount`, `symbol`, `toSymbol`, `chain`, `reason`, `confidence` |
-| `propose_bridge` | Cross-chain move | `amount`, `symbol`, `fromChain`, `toChain`, `reason`, `confidence` |
-| `propose_yield` | Yield ops | `amount`, `symbol`, `chain`, `protocol`, `action`, `reason`, `confidence` |
-| `simulate_proposal` | Dry-run check | `type`, `amount`, `symbol`, `chain`, `confidence` |
+| Tool | Args |
+|------|------|
+| `propose_payment` | `amount`, `symbol`, `chain`, `to`, `reason`, `confidence` |
+| `propose_swap` | `amount`, `symbol`, `toSymbol`, `chain`, `reason`, `confidence` |
+| `simulate_proposal` | `type`, `amount`, `symbol`, `chain`, `confidence` |
 
-**Always use `simulate_proposal` before high-value operations.** It returns `{ wouldApprove, violations[] }` without moving funds.
+**Always `simulate_proposal` before high-value ops.** Returns `{ wouldApprove, violations[] }`.
 
-#### Swarm Marketplace Tools
+#### Essential Swarm Tools
 
-| Tool | What it does | Required args |
-|------|-------------|---------------|
-| `swarm_announce` | Post listing | `category`, `title`, `description`, `minPrice`, `maxPrice`, `symbol` |
-| `swarm_bid` | Bid on listing | `announcementId`, `price`, `symbol`, `reason` |
-| `swarm_accept_bid` | Accept bid | `announcementId` |
-| `swarm_submit_payment` | Pay for deal | `announcementId` |
-| `swarm_deliver_result` | Deliver content | `announcementId`, `result` |
+| Tool | Args |
+|------|------|
+| `swarm_announce` | `category`, `title`, `description`, `minPrice`, `maxPrice`, `symbol` |
+| `swarm_bid` | `announcementId`, `price`, `symbol`, `reason` |
+| `swarm_accept_bid` | `announcementId` |
+| `swarm_submit_payment` | `announcementId` |
+| `swarm_deliver_result` | `announcementId`, `result`, `filename` |
 
-### Marketplace Deal Flows
+### Deal Flows
 
-**The buyer always pays.** Three categories:
+**The buyer always pays.** Categories: `seller`, `buyer`, `auction`.
 
-| Category | Creator role | Bidder role | Who pays |
-|----------|-------------|-------------|----------|
-| `seller` | Selling | Buying | Bidder |
-| `buyer` | Buying | Selling | Creator |
-| `auction` | Selling (highest wins) | Buying | Bidder |
-
-**Seller flow:** announce → wait for bids → accept bid → deliver content → buyer auto-pays.
-**Buyer flow:** announce → wait for offers → accept bid → pay → seller delivers.
+- **Seller:** announce → wait bids → accept → deliver → buyer auto-pays
+- **Buyer:** announce → wait offers → accept → pay → seller delivers
 
 ### Supported Assets
 
@@ -178,45 +228,48 @@ If your agent framework supports MCP (Claude, Cursor, Gemini, etc.), connect dir
 |--------|------|--------|
 | USDT | Tether USD stablecoin | Ethereum, Polygon, Arbitrum |
 | XAUT | Tether Gold (physical gold-backed) | Ethereum |
-| USAT | Tether US (regulated, GENIUS Act) | Ethereum |
+| USAT | Tether US (GENIUS Act regulated) | Ethereum |
 | BTC | Bitcoin | Bitcoin, Spark (Lightning) |
 | ETH | Ethereum | Ethereum, Arbitrum |
 
-### Rules
+### Policy Engine
+
+Every financial proposal is checked against immutable rules. Read `skills/policy-engine/SKILL.md` for the full architecture (16 module files covering all wallet, DeFi, swap, bridge, yield, and x402 operations).
+
+Quick reference:
+
+| Rule | Effect |
+|------|--------|
+| `max_per_tx` | Rejects if amount exceeds per-transaction limit |
+| `max_per_day` | Rejects if daily budget exhausted |
+| `cooldown_seconds` | Rejects if too soon after last tx |
+| `require_confidence` | Rejects if confidence too low |
+
+## Gotchas
 
 - **Amounts are human-readable strings**: `"1.5"` not `1500000`. The wallet converts.
-- **Confidence is 0.0-1.0 float**: `0.85` not `85`. Higher = more certain.
+- **Confidence is 0-1 float**: `0.85` not `85`.
 - **Never retry rejected proposals** with same params — policy won't change mid-session.
 - **Check gas before ERC-20 sends**: ETH needed for gas even when sending USDT.
-- **Bridges are async**: L2→L1 can take minutes. Don't assume instant settlement.
-- **Seeds/keys are inaccessible**: They exist only in the Wallet Isolate process. You will never see them.
-- **Policies are immutable**: You cannot modify spending limits. Only the human owner can via the Pear app.
-- **swarm_announce categories**: Only `buyer`, `seller`, `auction`. Not `service` or `compute`.
-
-## Common Issues
-
-| Issue | Cause | Fix |
-|---|---|---|
-| `Cannot connect to wallet` | Wallet not running | Ask user to start: `cd oikos && npm start` or launch Pear app |
-| `policy_violation: max_per_tx` | Amount exceeds per-tx limit | Check `policy_status`, reduce amount or split into smaller txs |
-| `policy_violation: max_per_day` | Daily budget exhausted | Wait for next day or ask human to adjust policy |
-| `policy_violation: cooldown` | Too soon after last tx | Wait for cooldown to expire, check `policy_status` for remaining time |
-| Balance shows 0 | Chain not connected or faucet needed | Run `oikos health` to check chains, use testnet faucet for funding |
-| Swarm empty | No peers online | Check `oikos swarm`, verify `SWARM_ENABLED=true` in wallet config |
-| `confidence too low` | Proposal confidence below threshold | Increase `confidence` parameter (0.8+ recommended) |
-| MCP endpoint 404 | Wrong URL or wallet restarting | Verify `POST http://127.0.0.1:3420/mcp`, check `oikos health` |
+- **Bridges are async**: L2→L1 can take minutes.
+- **swarm_announce categories**: Only `buyer`, `seller`, `auction`.
+- **Seeds/keys are inaccessible**: Exist only in the Wallet Isolate. You will never see them.
+- **Policies are immutable at runtime**: Only human owner can adjust (Oikos App or dashboard).
+- **Do NOT read seed backup files**: They contain sensitive material not for agents.
+- **Use absolute paths for CLI**: `"$HOME/.oikos/bin/oikos"` — not `oikos` (PATH may not be set).
+- **Dashboard defaults to localhost**: Use `--host 0.0.0.0` for remote access.
 
 ## Security Model
 
 ```
-Agent (you) ──CLI/MCP──→ Dashboard ──IPC──→ Wallet Isolate (keys + policy)
-                                                  ↓
+Agent (you) ──CLI/MCP──> Dashboard ──IPC──> Wallet Isolate (keys + policy)
+                                                  |
                                             Blockchain RPC
 ```
 
 - **Process isolation**: Wallet in separate runtime, keys never leave it
-- **Policy engine**: Every financial operation evaluated against immutable rules
-- **Append-only audit**: Every proposal permanently recorded (approved, rejected, or failed)
-- **Fail closed**: Any ambiguity = no funds move
+- **Policy engine**: Every operation evaluated against immutable rules
+- **Append-only audit**: Every proposal permanently recorded (approved, rejected, failed)
+- **Fail closed**: Ambiguity = no funds move
 - **E2E encrypted swarm**: Hyperswarm Noise for P2P marketplace
-- **You cannot bypass the policy engine**: Even if you craft a malicious MCP call, the Wallet Isolate independently evaluates and rejects policy violations
+- **You cannot bypass policy**: Even malicious MCP calls are independently evaluated by the Wallet Isolate

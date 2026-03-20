@@ -39,7 +39,7 @@ export interface X402RouteConfig {
 }
 
 /** Default x402 service routes */
-const DEFAULT_ROUTES: X402RouteConfig[] = [
+export const DEFAULT_ROUTES: X402RouteConfig[] = [
   {
     path: '/api/x402/price-feed',
     method: 'GET',
@@ -115,6 +115,10 @@ async function _mountWithX402Express(
     PLASMA_NETWORK,
     new ExactEvmScheme(),
   );
+
+  // Eagerly initialize — fetches supported payment kinds from facilitator.
+  // If the facilitator is unreachable, this throws and we fall back to manual 402.
+  await resourceServer.initialize();
 
   // Build route config map for paymentMiddleware
   // Using Record<string, unknown> to satisfy RoutesConfig type variance

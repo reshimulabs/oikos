@@ -52,6 +52,18 @@ echo -e "  wallet-isolate: ${DIM}$(wc -l < wallet-isolate/dist/src/main.js) line
 echo -e "  oikos-wallet:      ${DIM}$(wc -l < oikos-wallet/dist/src/main.js) lines${RESET}"
 echo ""
 
+# Refresh skills in OpenClaw workspace (if it exists)
+for SKILLS_TARGET in "$HOME/.openclaw/workspace/skills" "$HOME/.openclaw/skills"; do
+  if [[ -d "$(dirname "$SKILLS_TARGET")" ]]; then
+    mkdir -p "$SKILLS_TARGET"
+    cp -R "$PROJECT_DIR/skills/wdk-wallet" "$SKILLS_TARGET/" 2>/dev/null || true
+    cp -R "$PROJECT_DIR/skills/policy-engine" "$SKILLS_TARGET/" 2>/dev/null || true
+    mkdir -p "$SKILLS_TARGET/oikos" && cp "$PROJECT_DIR/SKILL.md" "$SKILLS_TARGET/oikos/SKILL.md" 2>/dev/null || true
+    echo -e "  ${DIM}Skills refreshed in $SKILLS_TARGET/${RESET}"
+  fi
+done
+echo ""
+
 # Optional restart
 if [[ "${1:-}" == "--restart" ]]; then
   echo -e "${DIM}Restarting oikos...${RESET}"
