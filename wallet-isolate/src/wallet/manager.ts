@@ -280,7 +280,7 @@ export class WalletManager implements WalletOperations {
    * @security THE CODE PATH THAT MOVES FUNDS FOR PAYMENTS.
    * This must only be called from ProposalExecutor after policy approval.
    */
-  async sendTransaction(chain: Chain, to: string, amount: bigint, _symbol: TokenSymbol): Promise<TransactionResult> {
+  async sendTransaction(chain: Chain, to: string, amount: bigint, symbol: TokenSymbol): Promise<TransactionResult> {
     this.ensureInitialized();
 
     try {
@@ -289,8 +289,27 @@ export class WalletManager implements WalletOperations {
         const result = await sparkAccount.sendTransaction({ to, value: amount });
         return { success: true, txHash: result.hash };
       }
+
       const account = await this.getAccount(chain);
-      const result = await account.sendTransaction({ to, value: amount });
+
+      // Native token (ETH, BTC) — simple value transfer
+      if (symbol === 'ETH' || symbol === 'BTC') {
+        const result = await account.sendTransaction({ to, value: amount });
+        return { success: true, txHash: result.hash };
+      }
+
+      // ERC-20 token (USDT, XAUT, USAT, etc.) — call transfer() on token contract
+      const tokenAddress = getTokenAddress(chain, symbol);
+      if (!tokenAddress) {
+        return { success: false, error: `No token contract address for ${symbol} on ${chain}` };
+      }
+
+      // ERC-20 transfer(address,uint256) via WDK account
+      const iface = new (await import('ethers')).Interface([
+        'function transfer(address to, uint256 amount) returns (bool)'
+      ]);
+      const data = iface.encodeFunctionData('transfer', [to, amount]);
+      const result = await account.sendTransaction({ to: tokenAddress, data, value: 0n });
       return { success: true, txHash: result.hash };
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unknown transaction error';
