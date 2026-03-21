@@ -31,6 +31,13 @@ export declare class AuditLog {
         agentId?: string;
         error?: string;
     }): AuditEntry;
+    /** Log an incoming Spark transfer detected via polling. */
+    logIncomingTransfer(transfer: {
+        id: string;
+        senderPublicKey?: string;
+        totalValue: number;
+        transferType?: string;
+    }): AuditEntry;
     /** Query recent entries (for dashboard display via IPC). */
     getEntries(limit?: number, since?: number): AuditEntry[];
     private writeEntry;

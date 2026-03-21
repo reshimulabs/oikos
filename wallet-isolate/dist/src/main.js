@@ -433,7 +433,49 @@ async function main() {
         console.error('[wallet-isolate] stdin closed, shutting down');
         proc.exit(0);
     });
-    // 7. Graceful shutdown
+    // 7. Incoming Spark transfer poller
+    if (!useMock && typeof wallet.sparkGetTransfers === 'function') {
+        const POLL_INTERVAL_MS = 30_000;
+        const seenTransferIds = new Set();
+        let initialPollDone = false;
+        const pollIncomingTransfers = async () => {
+            try {
+                const mgr = wallet;
+                const transfers = await mgr.sparkGetTransfers('incoming', 50);
+                if (!Array.isArray(transfers))
+                    return;
+                for (const t of transfers) {
+                    const tid = t['id'];
+                    if (!tid || seenTransferIds.has(tid))
+                        continue;
+                    seenTransferIds.add(tid);
+                    // Skip logging on first poll (seed the set with existing transfers)
+                    if (!initialPollDone)
+                        continue;
+                    const totalValue = t['totalValue'] ?? 0;
+                    const senderPub = t['senderIdentityPublicKey'];
+                    const tType = t['type'];
+                    audit.logIncomingTransfer({
+                        id: tid,
+                        senderPublicKey: senderPub,
+                        totalValue,
+                        transferType: tType,
+                    });
+                    console.error(`[wallet-isolate] Incoming Spark transfer: ${totalValue} sats (${tid.slice(0, 8)}...)`);
+                }
+                initialPollDone = true;
+            }
+            catch (err) {
+                // Silently continue — polling failure shouldn't crash the isolate
+                console.error('[wallet-isolate] Spark poll error:', err.message);
+            }
+        };
+        // Initial poll to seed known transfers, then start interval
+        void pollIncomingTransfers();
+        setInterval(() => void pollIncomingTransfers(), POLL_INTERVAL_MS);
+        console.error(`[wallet-isolate] Spark incoming transfer poller active (${POLL_INTERVAL_MS / 1000}s interval)`);
+    }
+    // 8. Graceful shutdown
     const shutdown = () => {
         console.error('[wallet-isolate] Shutting down...');
         proc.exit(0);

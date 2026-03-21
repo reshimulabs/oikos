@@ -220,11 +220,23 @@ async function updateFeed () {
   if (feedMode === 'activity') {
     var feedItems = []
     if (audit && audit.entries) {
-      audit.entries.forEach(function (e) {
+      audit.entries.filter(function (e) { return e.type !== 'proposal_received' }).forEach(function (e) {
         var type = (e.proposalType || e.type || 'system').toLowerCase()
         // AuditEntry uses .type (execution_success, policy_enforcement); ExecutionResult uses .status
-        var status = (e.status || (e.type === 'execution_success' ? 'executed' : e.type === 'policy_enforcement' ? 'rejected' : e.type === 'execution_failure' ? 'failed' : '') || '').toLowerCase()
-        var indicator = status === 'executed' ? 'fi-success' : status === 'rejected' ? 'fi-rejected' : 'fi-financial'
+        var rawStatus = (e.status || (e.type === 'execution_success' ? 'executed' : e.type === 'policy_enforcement' ? 'rejected' : e.type === 'execution_failure' ? 'failed' : '') || '').toLowerCase()
+        // Financial verbs: outflows = SENT (red), swaps = SWAPPED (gold), failures = red
+        var status = rawStatus
+        var indicator = 'fi-financial'
+        if (rawStatus === 'executed') {
+          if (type === 'payment' || type === 'spark_send') { status = 'sent'; indicator = 'fi-rejected' }  // red = outflow
+          else if (type === 'swap') { status = 'swapped'; indicator = 'fi-financial' }  // gold = neutral exchange
+          else if (type === 'bridge') { status = 'bridged'; indicator = 'fi-financial' }
+          else if (type === 'yield' && e.proposal && e.proposal.action === 'withdraw') { status = 'withdrawn'; indicator = 'fi-success' }  // green = inflow
+          else if (type === 'yield') { status = 'deposited'; indicator = 'fi-rejected' }  // red = outflow
+          else { indicator = 'fi-financial' }
+        } else if (rawStatus === 'rejected' || rawStatus === 'failed') {
+          indicator = 'fi-rejected'
+        }
         if (type === 'feedback') indicator = 'fi-system'
         var amount = e.proposal ? (e.proposal.amount || '') : ''
         var sym = e.proposal ? (e.proposal.symbol || '') : ''
@@ -258,12 +270,24 @@ async function updateAudit () {
   if (!data || !data.entries) return
   document.getElementById('audit-body').innerHTML = data.entries.length === 0
     ? '<tr><td colspan="5" class="empty">No entries</td></tr>'
-    : data.entries.map(function (e) {
+    : data.entries.filter(function (e) { return e.type !== 'proposal_received' }).map(function (e) {
       var time = e.timestamp ? new Date(e.timestamp).toLocaleString() : '--'
       var type = e.proposalType || e.type || '--'
       // AuditEntry uses .type (execution_success, policy_enforcement); ExecutionResult uses .status
-      var status = e.status || (e.type === 'execution_success' ? 'executed' : e.type === 'policy_enforcement' ? 'rejected' : e.type === 'execution_failure' ? 'failed' : e.type === 'proposal_received' ? 'received' : '--')
-      var sc = status === 'executed' ? 'var(--green)' : status === 'rejected' ? 'var(--red)' : 'var(--yellow)'
+      var rawStatus = e.status || (e.type === 'execution_success' ? 'executed' : e.type === 'policy_enforcement' ? 'rejected' : e.type === 'execution_failure' ? 'failed' : '--')
+      var tl = (e.proposalType || '').toLowerCase()
+      var status = rawStatus
+      if (rawStatus === 'executed') {
+        if (tl === 'payment' || tl === 'spark_send') status = 'sent'
+        else if (tl === 'swap') status = 'swapped'
+        else if (tl === 'bridge') status = 'bridged'
+        else if (tl === 'yield' && e.proposal && e.proposal.action === 'withdraw') status = 'withdrawn'
+        else if (tl === 'yield') status = 'deposited'
+      }
+      // Colors: red = outflow (sent, deposited, rejected, failed), green = inflow (withdrawn), gold = neutral (swapped, bridged)
+      var sc = (status === 'sent' || status === 'deposited' || status === 'rejected' || status === 'failed') ? 'var(--red)'
+             : (status === 'withdrawn') ? 'var(--green)'
+             : 'var(--yellow)'
       var amount = e.proposal ? (e.proposal.amount || '--') : '--'
       var sym = e.proposal ? (e.proposal.symbol || '') : ''
       var detail = e.reason || e.error || ((e.violations || []).join(', ')) || (e.txHash ? 'tx: ' + e.txHash.slice(0, 16) + '...' : '')

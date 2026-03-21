@@ -521,12 +521,16 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/policies' && req.method === 'GET') {
-    // Proxy to wallet for full policy data including rules
+    // Protomux first when connected to remote agent
+    if (state.connected && state.policies.length > 0) {
+      return json(res, { policies: state.policies })
+    }
+    // Fall back to local wallet HTTP
     if (walletUrl) {
       try {
         const data = await httpGet(walletUrl + '/api/policies')
         if (data && data.policies) return json(res, data)
-      } catch (e) { /* fall through to protomux state */ }
+      } catch (e) { /* fall through */ }
     }
     return json(res, { policies: state.policies })
   }
@@ -545,29 +549,23 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/strategies' && req.method === 'GET') {
+    // Protomux first when connected to remote agent
+    if (state.connected && state.strategies.length > 0) {
+      return json(res, { strategies: state.strategies, modules: [] })
+    }
+    // Fall back to local wallet HTTP
     if (walletUrl) {
       try {
         const data = await httpGet(walletUrl + '/api/strategies')
         if (data && data.strategies) return json(res, data)
       } catch (e) { /* fall through */ }
     }
-    // Protomux fallback — state.strategies populated by strategy_update messages
-    if (state.strategies.length > 0) {
-      return json(res, { strategies: state.strategies, modules: [] })
-    }
-    return json(res, { strategies: [], modules: [] })
+    return json(res, { strategies: state.strategies.length > 0 ? state.strategies : [], modules: [] })
   }
 
   if (url === '/api/strategies' && req.method === 'POST') {
     const body = await readBody(req)
-    // Try HTTP proxy first
-    if (walletUrl) {
-      try {
-        const data = await httpPost(walletUrl + '/api/strategies', body)
-        if (data && data.success) return json(res, data)
-      } catch { /* fall through to protomux */ }
-    }
-    // Protomux fallback — send strategy_save and await correlated response
+    // Protomux first when connected — modify remote agent's strategies
     if (companionMessage) {
       const requestId = 'sr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
       const result = await sendProtomuxRequest({
@@ -581,14 +579,7 @@ const server = http.createServer(async (req, res) => {
 
   if (url === '/api/strategies/toggle' && req.method === 'POST') {
     const body = await readBody(req)
-    // Try HTTP proxy first
-    if (walletUrl) {
-      try {
-        const data = await httpPost(walletUrl + '/api/strategies/toggle', body)
-        if (data && data.success) return json(res, data)
-      } catch { /* fall through to protomux */ }
-    }
-    // Protomux fallback
+    // Protomux first when connected — toggle remote agent's strategies
     if (companionMessage) {
       const requestId = 'st-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
       const result = await sendProtomuxRequest({
@@ -601,6 +592,17 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/strategies/delete' && req.method === 'POST') {
+    // Protomux first when connected
+    if (companionMessage) {
+      const body = await readBody(req)
+      const requestId = 'sd-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
+      const result = await sendProtomuxRequest({
+        type: 'strategy_delete', filename: body.filename,
+        requestId, timestamp: Date.now()
+      })
+      return json(res, result)
+    }
+    // Fall back to local wallet HTTP
     if (walletUrl) {
       try {
         const body = await readBody(req)
@@ -614,14 +616,18 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.startsWith('/api/audit')) {
-    // Proxy to wallet for real audit log entries
+    // When connected to remote agent, ONLY show protomux data (never local wallet)
+    if (state.connected) {
+      return json(res, { entries: state.executions })
+    }
+    // Only fall back to local wallet HTTP when NOT connected
     if (walletUrl) {
       try {
         const data = await httpGet(walletUrl + url)
         if (data && data.entries && data.entries.length > 0) return json(res, data)
-      } catch (e) { /* fall through to protomux state */ }
+      } catch (e) { /* fall through */ }
     }
-    return json(res, { entries: state.executions })
+    return json(res, { entries: [] })
   }
 
   // ── Auth API — proxy to wallet dashboard ──
@@ -752,8 +758,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/events') {
-    // Proxy to wallet for real events from eventBus
-    if (walletUrl) {
+    // Fall back to local wallet HTTP only when not connected
+    if (!state.connected && walletUrl) {
       try {
         const limit = new URL(url, 'http://x').searchParams.get('limit') || '50'
         const data = await httpGet(walletUrl + '/api/events?limit=' + limit)

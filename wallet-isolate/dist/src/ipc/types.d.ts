@@ -199,13 +199,18 @@ export interface IPCResponse {
 export interface AuditEntry {
     id: string;
     timestamp: string;
-    type: 'proposal_received' | 'policy_enforcement' | 'execution_success' | 'execution_failure' | 'malformed_message' | 'identity_operation';
+    type: 'proposal_received' | 'policy_enforcement' | 'execution_success' | 'execution_failure' | 'malformed_message' | 'identity_operation' | 'incoming_transfer';
     proposalType?: string;
     source?: ProposalSource;
     proposal?: ProposalCommon;
     violations?: string[];
     txHash?: string;
     error?: string;
+    transferId?: string;
+    senderPublicKey?: string;
+    amount?: number;
+    transferType?: string;
+    direction?: string;
 }
 export declare function isValidTokenSymbol(value: unknown): value is TokenSymbol;
 export declare function isValidChain(value: unknown): value is Chain;

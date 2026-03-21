@@ -103,6 +103,26 @@ export class AuditLog {
     });
   }
 
+  /** Log an incoming Spark transfer detected via polling. */
+  logIncomingTransfer(transfer: {
+    id: string;
+    senderPublicKey?: string;
+    totalValue: number;
+    transferType?: string;
+  }): AuditEntry {
+    return this.writeEntry({
+      id: generateEntryId(),
+      timestamp: new Date().toISOString(),
+      type: 'incoming_transfer',
+      proposalType: 'spark_receive',
+      transferId: transfer.id,
+      senderPublicKey: transfer.senderPublicKey,
+      amount: transfer.totalValue,
+      transferType: transfer.transferType,
+      direction: 'incoming',
+    });
+  }
+
   /** Query recent entries (for dashboard display via IPC). */
   getEntries(limit?: number, since?: number): AuditEntry[] {
     let result = this.entries;

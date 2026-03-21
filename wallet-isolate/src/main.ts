@@ -509,7 +509,52 @@ async function main(): Promise<void> {
     proc.exit(0);
   });
 
-  // 7. Graceful shutdown
+  // 7. Incoming Spark transfer poller
+  if (!useMock && typeof (wallet as WalletManager).sparkGetTransfers === 'function') {
+    const POLL_INTERVAL_MS = 30_000;
+    const seenTransferIds = new Set<string>();
+    let initialPollDone = false;
+
+    const pollIncomingTransfers = async (): Promise<void> => {
+      try {
+        const mgr = wallet as WalletManager;
+        const transfers = await mgr.sparkGetTransfers('incoming', 50);
+        if (!Array.isArray(transfers)) return;
+
+        for (const t of transfers) {
+          const tid = (t as Record<string, unknown>)['id'] as string | undefined;
+          if (!tid || seenTransferIds.has(tid)) continue;
+          seenTransferIds.add(tid);
+
+          // Skip logging on first poll (seed the set with existing transfers)
+          if (!initialPollDone) continue;
+
+          const totalValue = (t as Record<string, unknown>)['totalValue'] as number ?? 0;
+          const senderPub = (t as Record<string, unknown>)['senderIdentityPublicKey'] as string | undefined;
+          const tType = (t as Record<string, unknown>)['type'] as string | undefined;
+
+          audit.logIncomingTransfer({
+            id: tid,
+            senderPublicKey: senderPub,
+            totalValue,
+            transferType: tType,
+          });
+          console.error(`[wallet-isolate] Incoming Spark transfer: ${totalValue} sats (${tid.slice(0, 8)}...)`);
+        }
+        initialPollDone = true;
+      } catch (err) {
+        // Silently continue — polling failure shouldn't crash the isolate
+        console.error('[wallet-isolate] Spark poll error:', (err as Error).message);
+      }
+    };
+
+    // Initial poll to seed known transfers, then start interval
+    void pollIncomingTransfers();
+    setInterval(() => void pollIncomingTransfers(), POLL_INTERVAL_MS);
+    console.error(`[wallet-isolate] Spark incoming transfer poller active (${POLL_INTERVAL_MS / 1000}s interval)`);
+  }
+
+  // 8. Graceful shutdown
   const shutdown = (): void => {
     console.error('[wallet-isolate] Shutting down...');
     proc.exit(0);

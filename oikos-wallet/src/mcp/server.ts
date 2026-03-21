@@ -528,7 +528,7 @@ const handlers: Record<string, ToolHandler> = {
     const proposal: PaymentProposal = {
       amount: toSmallestUnit(params['amount'] as string, symbol),
       symbol, chain: params['chain'] as Chain, to: params['to'] as string,
-      reason: params['reason'] as string, confidence: params['confidence'] as number,
+      reason: params['reason'] as string, confidence: (params['confidence'] as number) ?? 1.0,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
     const result = await svc.wallet.proposePayment(proposal, 'mcp');
@@ -540,7 +540,7 @@ const handlers: Record<string, ToolHandler> = {
     const proposal: SwapProposal = {
       amount: toSmallestUnit(params['amount'] as string, symbol),
       symbol, toSymbol: params['toSymbol'] as TokenSymbol, chain: params['chain'] as Chain,
-      reason: params['reason'] as string, confidence: params['confidence'] as number,
+      reason: params['reason'] as string, confidence: (params['confidence'] as number) ?? 1.0,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
     const result = await svc.wallet.proposeSwap(proposal, 'mcp');
@@ -553,7 +553,7 @@ const handlers: Record<string, ToolHandler> = {
       amount: toSmallestUnit(params['amount'] as string, symbol),
       symbol, chain: params['fromChain'] as Chain,
       fromChain: params['fromChain'] as Chain, toChain: params['toChain'] as Chain,
-      reason: params['reason'] as string, confidence: params['confidence'] as number,
+      reason: params['reason'] as string, confidence: (params['confidence'] as number) ?? 1.0,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
     const result = await svc.wallet.proposeBridge(proposal, 'mcp');
@@ -566,7 +566,7 @@ const handlers: Record<string, ToolHandler> = {
       amount: toSmallestUnit(params['amount'] as string, symbol),
       symbol, chain: params['chain'] as Chain,
       protocol: params['protocol'] as string, action: params['action'] as 'deposit' | 'withdraw',
-      reason: params['reason'] as string, confidence: params['confidence'] as number,
+      reason: params['reason'] as string, confidence: (params['confidence'] as number) ?? 1.0,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
     const result = await svc.wallet.proposeYield(proposal, 'mcp');
@@ -679,7 +679,7 @@ const handlers: Record<string, ToolHandler> = {
       precision: params['precision'] as number,
       amount: toSmallestUnit(params['amount'] as string, 'RGB' as TokenSymbol),
       symbol: 'RGB' as TokenSymbol, chain: 'rgb' as Chain,
-      reason: params['reason'] as string, confidence: params['confidence'] as number,
+      reason: params['reason'] as string, confidence: (params['confidence'] as number) ?? 1.0,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
     return svc.wallet.proposeRGBIssue(proposal, 'mcp');
@@ -689,7 +689,7 @@ const handlers: Record<string, ToolHandler> = {
       invoice: params['invoice'] as string,
       amount: toSmallestUnit(params['amount'] as string, 'RGB' as TokenSymbol),
       symbol: (params['symbol'] ?? 'RGB') as TokenSymbol, chain: 'rgb' as Chain,
-      reason: params['reason'] as string, confidence: params['confidence'] as number,
+      reason: params['reason'] as string, confidence: (params['confidence'] as number) ?? 1.0,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
     return svc.wallet.proposeRGBTransfer(proposal, 'mcp');
@@ -702,7 +702,7 @@ const handlers: Record<string, ToolHandler> = {
     const proposal: ProposalCommon = {
       amount: toSmallestUnit(params['amount'] as string, symbol),
       symbol, chain: params['chain'] as Chain,
-      reason: 'dry-run simulation', confidence: params['confidence'] as number,
+      reason: 'dry-run simulation', confidence: (params['confidence'] as number) ?? 1.0,
       strategy: 'simulate', timestamp: Date.now(),
     };
     const p = proposal as unknown as Record<string, unknown>;
@@ -746,7 +746,7 @@ const handlers: Record<string, ToolHandler> = {
       to: params['to'] as string,
       amountSats: params['amountSats'] as number,
       reason: params['reason'] as string,
-      confidence: params['confidence'] as number,
+      confidence: (params['confidence'] as number) ?? 1.0,
       amount: String(params['amountSats']),
       symbol: 'BTC' as TokenSymbol,
       chain: 'spark' as Chain,
@@ -770,7 +770,7 @@ const handlers: Record<string, ToolHandler> = {
       invoice: params['invoice'] as string,
       maxFeeSats: (params['maxFeeSats'] as number) || 100,
       reason: params['reason'] as string,
-      confidence: params['confidence'] as number,
+      confidence: (params['confidence'] as number) ?? 1.0,
       amount: '0', // Amount determined by invoice
       symbol: 'BTC' as TokenSymbol,
       chain: 'spark' as Chain,

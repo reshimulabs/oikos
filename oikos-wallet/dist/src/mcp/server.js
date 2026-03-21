@@ -482,7 +482,7 @@ const handlers = {
         const proposal = {
             amount: toSmallestUnit(params['amount'], symbol),
             symbol, chain: params['chain'], to: params['to'],
-            reason: params['reason'], confidence: params['confidence'],
+            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
             strategy: 'mcp-tool', timestamp: Date.now(),
         };
         const result = await svc.wallet.proposePayment(proposal, 'mcp');
@@ -495,7 +495,7 @@ const handlers = {
         const proposal = {
             amount: toSmallestUnit(params['amount'], symbol),
             symbol, toSymbol: params['toSymbol'], chain: params['chain'],
-            reason: params['reason'], confidence: params['confidence'],
+            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
             strategy: 'mcp-tool', timestamp: Date.now(),
         };
         const result = await svc.wallet.proposeSwap(proposal, 'mcp');
@@ -509,7 +509,7 @@ const handlers = {
             amount: toSmallestUnit(params['amount'], symbol),
             symbol, chain: params['fromChain'],
             fromChain: params['fromChain'], toChain: params['toChain'],
-            reason: params['reason'], confidence: params['confidence'],
+            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
             strategy: 'mcp-tool', timestamp: Date.now(),
         };
         const result = await svc.wallet.proposeBridge(proposal, 'mcp');
@@ -523,7 +523,7 @@ const handlers = {
             amount: toSmallestUnit(params['amount'], symbol),
             symbol, chain: params['chain'],
             protocol: params['protocol'], action: params['action'],
-            reason: params['reason'], confidence: params['confidence'],
+            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
             strategy: 'mcp-tool', timestamp: Date.now(),
         };
         const result = await svc.wallet.proposeYield(proposal, 'mcp');
@@ -644,7 +644,7 @@ const handlers = {
             precision: params['precision'],
             amount: toSmallestUnit(params['amount'], 'RGB'),
             symbol: 'RGB', chain: 'rgb',
-            reason: params['reason'], confidence: params['confidence'],
+            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
             strategy: 'mcp-tool', timestamp: Date.now(),
         };
         return svc.wallet.proposeRGBIssue(proposal, 'mcp');
@@ -654,7 +654,7 @@ const handlers = {
             invoice: params['invoice'],
             amount: toSmallestUnit(params['amount'], 'RGB'),
             symbol: (params['symbol'] ?? 'RGB'), chain: 'rgb',
-            reason: params['reason'], confidence: params['confidence'],
+            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
             strategy: 'mcp-tool', timestamp: Date.now(),
         };
         return svc.wallet.proposeRGBTransfer(proposal, 'mcp');
@@ -667,7 +667,7 @@ const handlers = {
         const proposal = {
             amount: toSmallestUnit(params['amount'], symbol),
             symbol, chain: params['chain'],
-            reason: 'dry-run simulation', confidence: params['confidence'],
+            reason: 'dry-run simulation', confidence: params['confidence'] ?? 1.0,
             strategy: 'simulate', timestamp: Date.now(),
         };
         const p = proposal;
@@ -719,7 +719,7 @@ const handlers = {
             to: params['to'],
             amountSats: params['amountSats'],
             reason: params['reason'],
-            confidence: params['confidence'],
+            confidence: params['confidence'] ?? 1.0,
             amount: String(params['amountSats']),
             symbol: 'BTC',
             chain: 'spark',
@@ -743,7 +743,7 @@ const handlers = {
             invoice: params['invoice'],
             maxFeeSats: params['maxFeeSats'] || 100,
             reason: params['reason'],
-            confidence: params['confidence'],
+            confidence: params['confidence'] ?? 1.0,
             amount: '0', // Amount determined by invoice
             symbol: 'BTC',
             chain: 'spark',

@@ -309,13 +309,19 @@ export interface IPCResponse {
 export interface AuditEntry {
   id: string;
   timestamp: string; // ISO 8601
-  type: 'proposal_received' | 'policy_enforcement' | 'execution_success' | 'execution_failure' | 'malformed_message' | 'identity_operation';
+  type: 'proposal_received' | 'policy_enforcement' | 'execution_success' | 'execution_failure' | 'malformed_message' | 'identity_operation' | 'incoming_transfer';
   proposalType?: string;  // 'payment' | 'swap' | 'bridge' | 'yield' | 'feedback' | 'register' | 'set_wallet'
   source?: ProposalSource;
   proposal?: ProposalCommon;
   violations?: string[];
   txHash?: string;
   error?: string;
+  // Incoming transfer fields (for type='incoming_transfer')
+  transferId?: string;
+  senderPublicKey?: string;
+  amount?: number;       // satoshis
+  transferType?: string; // TRANSFER, PREIMAGE_SWAP, etc.
+  direction?: string;    // 'incoming'
 }
 
 // ── Validation ──
