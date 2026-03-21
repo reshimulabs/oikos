@@ -28,6 +28,30 @@ export class AuditLog {
     this.append = append;
   }
 
+  /**
+   * Hydrate in-memory cache from existing audit file lines.
+   * Called once at startup to restore history across restarts.
+   * Invalid lines are silently skipped (file may have partial writes).
+   */
+  hydrate(lines: string[]): void {
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const entry = JSON.parse(trimmed) as AuditEntry;
+        if (entry.id && entry.timestamp && entry.type) {
+          this.entries.push(entry);
+          entryCounter++;
+        }
+      } catch {
+        // Skip malformed lines — partial writes from crashes are expected
+      }
+    }
+    if (this.entries.length > 0) {
+      console.error(`[audit] Hydrated ${this.entries.length} entries from disk`);
+    }
+  }
+
   /** Log a received proposal (before policy evaluation). */
   logProposalReceived(proposal: ProposalCommon, proposalType?: string, source?: ProposalSource): AuditEntry {
     return this.writeEntry({

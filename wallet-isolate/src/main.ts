@@ -445,9 +445,16 @@ async function main(): Promise<void> {
   const policy = new PolicyEngine(policyConfig);
   console.error(`[wallet-isolate] Loaded ${policyConfig.policies.length} policy(ies)`);
 
-  // 2. Initialize audit log
+  // 2. Initialize audit log (hydrate from disk to survive restarts)
+  const auditPath = getEnv('AUDIT_LOG_PATH', 'audit.jsonl');
   const auditAppend = createAuditAppender();
   const audit = new AuditLog(auditAppend);
+  try {
+    const existing = readFileSync(auditPath, 'utf-8');
+    if (existing) audit.hydrate(existing.split('\n'));
+  } catch {
+    // No existing file — first run, nothing to hydrate
+  }
 
   // 3. Initialize wallet
   const useMock = getEnv('MOCK_WALLET', 'true') === 'true';
