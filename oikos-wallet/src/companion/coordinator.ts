@@ -34,6 +34,7 @@ import type {
 export interface CompanionStateProvider {
   getBalances(): Promise<BalanceResponse[]>;
   getPolicies(): Promise<PolicyStatus[]>;
+  getAddresses?(): Promise<Array<{ chain: string; address: string }>>;
   getPrices?(): Promise<Array<{ symbol: string; priceUsd: number; source: string; updatedAt: number }>>;
 }
 
@@ -318,6 +319,16 @@ export class CompanionCoordinator {
       };
       this.send(balanceMsg);
     } catch { /* wallet may not be ready */ }
+
+    // Address update (from wallet IPC)
+    if (this.stateProvider.getAddresses) {
+      try {
+        const addresses = await this.stateProvider.getAddresses();
+        if (addresses.length > 0) {
+          this.send({ type: 'address_update', addresses, timestamp: Date.now() });
+        }
+      } catch { /* wallet may not be ready */ }
+    }
 
     // Agent reasoning — no agent connected, send stub
     const reasoningMsg: CompanionAgentReasoning = {

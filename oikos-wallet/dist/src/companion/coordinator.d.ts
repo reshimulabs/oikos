@@ -18,6 +18,10 @@ import type { AgentToCompanionMessage } from './types.js';
 export interface CompanionStateProvider {
     getBalances(): Promise<BalanceResponse[]>;
     getPolicies(): Promise<PolicyStatus[]>;
+    getAddresses?(): Promise<Array<{
+        chain: string;
+        address: string;
+    }>>;
     getPrices?(): Promise<Array<{
         symbol: string;
         priceUsd: number;

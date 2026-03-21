@@ -209,6 +209,13 @@ async function main(): Promise<void> {
         }
         return policies;
       },
+      getAddresses: async () => {
+        const chains: string[] = ['ethereum', 'bitcoin', 'polygon', 'arbitrum', 'spark'];
+        const results = await Promise.all(
+          chains.map(chain => wallet.queryAddress(chain).then(r => ({ chain, address: r.address })).catch(() => null))
+        );
+        return results.filter((r): r is { chain: string; address: string } => r !== null && !!r.address);
+      },
       getPrices: () => pricing.getAllPrices(),
     };
 

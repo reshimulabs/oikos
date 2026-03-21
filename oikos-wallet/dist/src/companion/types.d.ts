@@ -101,6 +101,15 @@ export interface CompanionPriceUpdate {
     }>;
     timestamp: number;
 }
+/** Wallet addresses per chain */
+export interface CompanionAddressUpdate {
+    type: 'address_update';
+    addresses: Array<{
+        chain: string;
+        address: string;
+    }>;
+    timestamp: number;
+}
 /** Chat reply from the brain (agent response to human message) */
 export interface CompanionChatReply {
     type: 'chat_reply';
@@ -124,7 +133,7 @@ export interface CompanionPing {
     timestamp: number;
 }
 /** Messages sent FROM the agent TO the companion */
-export type AgentToCompanionMessage = CompanionBalanceUpdate | CompanionAgentReasoning | CompanionSwarmStatus | CompanionPolicyUpdate | CompanionPriceUpdate | CompanionExecutionNotify | CompanionApprovalRequest | CompanionChatReply;
+export type AgentToCompanionMessage = CompanionBalanceUpdate | CompanionAgentReasoning | CompanionSwarmStatus | CompanionPolicyUpdate | CompanionPriceUpdate | CompanionAddressUpdate | CompanionExecutionNotify | CompanionApprovalRequest | CompanionChatReply;
 /** Messages sent FROM the companion TO the agent */
 export type CompanionToAgentMessage = CompanionInstruction | CompanionApprovalResponse | CompanionPing;
 /** All companion messages */

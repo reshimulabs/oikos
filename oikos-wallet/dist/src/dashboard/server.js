@@ -119,11 +119,12 @@ export function createDashboard(services, port, host = '127.0.0.1') {
             res.status(500).json({ error: 'Failed to query balances' });
         }
     });
-    /** Wallet addresses */
+    /** Wallet addresses — all supported chains */
     app.get('/api/addresses', async (_req, res) => {
         try {
-            const eth = await wallet.queryAddress('ethereum').catch(() => null);
-            res.json({ addresses: [eth].filter(Boolean) });
+            const chains = ['ethereum', 'bitcoin', 'polygon', 'arbitrum', 'spark'];
+            const results = await Promise.all(chains.map(chain => wallet.queryAddress(chain).catch(() => null)));
+            res.json({ addresses: results.filter(Boolean) });
         }
         catch {
             res.status(500).json({ error: 'Failed to query addresses' });

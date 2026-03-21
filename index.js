@@ -262,23 +262,31 @@ async function connectToAgent () {
     console.log('[companion] Swarm error (non-fatal):', err.message || err)
   })
 
+  // Rate-limit noisy peer logs (relay connects/disconnects/timeouts loop)
+  const seenPeers = new Map()
+  const PEER_LOG_INTERVAL = 60000 // log each non-agent peer at most once per minute
+
   swarm.on('connection', (socket) => {
     const remotePubkey = socket.remotePublicKey
     if (!remotePubkey) return
 
     const remoteHex = b4a.toString(remotePubkey, 'hex')
-    console.log('[companion] Connected to:', remoteHex.slice(0, 16) + '...')
 
     // Catch socket errors to prevent uncaught ETIMEDOUT crashes
-    socket.on('error', (err) => {
-      console.log('[companion] Socket error (non-fatal):', err.message || err)
-    })
+    socket.on('error', () => { /* non-fatal, suppressed */ })
 
     // Only open companion channel with the expected agent, not relay or other peers
     if (remoteHex !== agentPubkey) {
-      console.log('[companion] Ignoring non-agent peer (relay or other):', remoteHex.slice(0, 16) + '...')
+      const now = Date.now()
+      const lastLog = seenPeers.get(remoteHex) || 0
+      if (now - lastLog > PEER_LOG_INTERVAL) {
+        console.log('[companion] Ignoring non-agent peer:', remoteHex.slice(0, 16) + '...')
+        seenPeers.set(remoteHex, now)
+      }
       return
     }
+
+    console.log('[companion] Agent connected:', remoteHex.slice(0, 16) + '...')
 
     const mux = Protomux.from(socket)
     const channel = mux.createChannel({
@@ -540,6 +548,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url.startsWith('/api/audit')) {
+    // Proxy to wallet for real audit log entries
+    if (walletUrl) {
+      try {
+        const data = await httpGet(walletUrl + url)
+        if (data && data.entries && data.entries.length > 0) return json(res, data)
+      } catch (e) { /* fall through to protomux state */ }
+    }
     return json(res, { entries: state.executions })
   }
 
@@ -671,6 +686,14 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/events') {
+    // Proxy to wallet for real events from eventBus
+    if (walletUrl) {
+      try {
+        const limit = new URL(url, 'http://x').searchParams.get('limit') || '50'
+        const data = await httpGet(walletUrl + '/api/events?limit=' + limit)
+        if (data && data.events) return json(res, data)
+      } catch (e) { /* fall through */ }
+    }
     return json(res, { events: [] })
   }
 

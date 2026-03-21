@@ -75,6 +75,13 @@ export interface CompanionPriceUpdate {
   timestamp: number;
 }
 
+/** Wallet addresses per chain */
+export interface CompanionAddressUpdate {
+  type: 'address_update';
+  addresses: Array<{ chain: string; address: string }>;
+  timestamp: number;
+}
+
 /** Chat reply from the brain (agent response to human message) */
 export interface CompanionChatReply {
   type: 'chat_reply';
@@ -112,6 +119,7 @@ export type AgentToCompanionMessage =
   | CompanionSwarmStatus
   | CompanionPolicyUpdate
   | CompanionPriceUpdate
+  | CompanionAddressUpdate
   | CompanionExecutionNotify
   | CompanionApprovalRequest
   | CompanionChatReply;

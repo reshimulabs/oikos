@@ -192,6 +192,11 @@ async function main() {
                 }
                 return policies;
             },
+            getAddresses: async () => {
+                const chains = ['ethereum', 'bitcoin', 'polygon', 'arbitrum', 'spark'];
+                const results = await Promise.all(chains.map(chain => wallet.queryAddress(chain).then(r => ({ chain, address: r.address })).catch(() => null)));
+                return results.filter((r) => r !== null && !!r.address);
+            },
             getPrices: () => pricing.getAllPrices(),
         };
         companion = new CC(wallet, stateProvider, {

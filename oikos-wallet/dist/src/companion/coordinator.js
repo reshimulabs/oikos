@@ -245,6 +245,16 @@ export class CompanionCoordinator {
             this.send(balanceMsg);
         }
         catch { /* wallet may not be ready */ }
+        // Address update (from wallet IPC)
+        if (this.stateProvider.getAddresses) {
+            try {
+                const addresses = await this.stateProvider.getAddresses();
+                if (addresses.length > 0) {
+                    this.send({ type: 'address_update', addresses, timestamp: Date.now() });
+                }
+            }
+            catch { /* wallet may not be ready */ }
+        }
         // Agent reasoning — no agent connected, send stub
         const reasoningMsg = {
             type: 'agent_reasoning',
