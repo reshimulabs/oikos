@@ -70,6 +70,9 @@ const state = {
 // Pending chat reply resolvers (instruction → wait for chat_reply)
 let chatReplyResolve = null
 
+// Pending protomux request/response correlators (requestId → resolve callback)
+const pendingRequests = new Map()
+
 let companionMessage = null
 let swarm = null
 
@@ -214,6 +217,11 @@ function handleAgentMessage (buf) {
           chatReplyResolve(agentMsg)
           chatReplyResolve = null
         }
+        break
+      }
+      case 'strategy_result': {
+        const cb = pendingRequests.get(msg.requestId)
+        if (cb) { pendingRequests.delete(msg.requestId); cb(msg) }
         break
       }
       default:
@@ -388,6 +396,32 @@ function httpPost (url, body) {
   })
 }
 
+// Send a message over protomux and wait for a correlated response by requestId
+function sendProtomuxRequest (msg, timeoutMs) {
+  timeoutMs = timeoutMs || 10000
+  return new Promise((resolve) => {
+    if (!companionMessage) {
+      resolve({ error: 'Companion channel not connected' })
+      return
+    }
+    const timer = setTimeout(() => {
+      pendingRequests.delete(msg.requestId)
+      resolve({ error: 'Timeout waiting for wallet response' })
+    }, timeoutMs)
+    pendingRequests.set(msg.requestId, (result) => {
+      clearTimeout(timer)
+      resolve(result)
+    })
+    try {
+      companionMessage.send(Buffer.from(JSON.stringify(msg)))
+    } catch (err) {
+      clearTimeout(timer)
+      pendingRequests.delete(msg.requestId)
+      resolve({ error: 'Failed to send: ' + (err.message || String(err)) })
+    }
+  })
+}
+
 function json (res, data, status) {
   res.statusCode = status || 200
   res.setHeader('Content-Type', 'application/json')
@@ -509,27 +543,43 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/strategies' && req.method === 'POST') {
+    const body = await readBody(req)
+    // Try HTTP proxy first
     if (walletUrl) {
       try {
-        const body = await readBody(req)
         const data = await httpPost(walletUrl + '/api/strategies', body)
-        return json(res, data || { error: 'No response from wallet' })
-      } catch (e) {
-        return json(res, { error: 'Failed to save strategy' }, 500)
-      }
+        if (data && data.success) return json(res, data)
+      } catch { /* fall through to protomux */ }
+    }
+    // Protomux fallback — send strategy_save and await correlated response
+    if (companionMessage) {
+      const requestId = 'sr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
+      const result = await sendProtomuxRequest({
+        type: 'strategy_save', filename: body.filename, content: body.content,
+        requestId, timestamp: Date.now()
+      })
+      return json(res, result)
     }
     return json(res, { error: 'Wallet not connected' }, 503)
   }
 
   if (url === '/api/strategies/toggle' && req.method === 'POST') {
+    const body = await readBody(req)
+    // Try HTTP proxy first
     if (walletUrl) {
       try {
-        const body = await readBody(req)
         const data = await httpPost(walletUrl + '/api/strategies/toggle', body)
-        return json(res, data || { error: 'No response from wallet' })
-      } catch (e) {
-        return json(res, { error: 'Failed to toggle strategy' }, 500)
-      }
+        if (data && data.success) return json(res, data)
+      } catch { /* fall through to protomux */ }
+    }
+    // Protomux fallback
+    if (companionMessage) {
+      const requestId = 'st-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
+      const result = await sendProtomuxRequest({
+        type: 'strategy_toggle', filename: body.filename, enabled: body.enabled,
+        requestId, timestamp: Date.now()
+      })
+      return json(res, result)
     }
     return json(res, { error: 'Wallet not connected' }, 503)
   }

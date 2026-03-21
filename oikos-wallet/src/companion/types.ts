@@ -110,6 +110,35 @@ export interface CompanionPing {
   timestamp: number;
 }
 
+/** Request to save a strategy file via protomux */
+export interface CompanionStrategySave {
+  type: 'strategy_save';
+  filename: string;
+  content: string;
+  requestId: string;
+  timestamp: number;
+}
+
+/** Request to toggle a strategy's enabled state via protomux */
+export interface CompanionStrategyToggle {
+  type: 'strategy_toggle';
+  filename: string;
+  enabled: boolean;
+  requestId: string;
+  timestamp: number;
+}
+
+/** Response to a strategy save/toggle request */
+export interface CompanionStrategyResult {
+  type: 'strategy_result';
+  requestId: string;
+  success: boolean;
+  filename?: string;
+  action?: string;
+  error?: string;
+  timestamp: number;
+}
+
 // ── Union Types ──
 
 /** Messages sent FROM the agent TO the companion */
@@ -122,13 +151,16 @@ export type AgentToCompanionMessage =
   | CompanionAddressUpdate
   | CompanionExecutionNotify
   | CompanionApprovalRequest
-  | CompanionChatReply;
+  | CompanionChatReply
+  | CompanionStrategyResult;
 
 /** Messages sent FROM the companion TO the agent */
 export type CompanionToAgentMessage =
   | CompanionInstruction
   | CompanionApprovalResponse
-  | CompanionPing;
+  | CompanionPing
+  | CompanionStrategySave
+  | CompanionStrategyToggle;
 
 /** All companion messages */
 export type CompanionMessage = AgentToCompanionMessage | CompanionToAgentMessage;
