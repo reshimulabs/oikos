@@ -57,6 +57,33 @@ function loadDotEnv(filePath) {
 const repoRoot = join(__dirname, '..', '..', '..', '..');
 loadDotEnv(join(process.cwd(), '.env'));
 loadDotEnv(join(repoRoot, '.env'));
+/**
+ * Auto-discover OpenClaw hooks token from ~/.openclaw/openclaw.json
+ * so users don't need to manually set COMPANION_HOOK_TOKEN.
+ */
+function discoverOpenClawHookToken() {
+    if (process.env['COMPANION_HOOK_TOKEN'])
+        return process.env['COMPANION_HOOK_TOKEN'];
+    const home = process.env['HOME'] || process.env['USERPROFILE'] || '';
+    const candidates = [
+        join(home, '.openclaw', 'openclaw.json'),
+        join(home, '.openclaw', 'config.json'),
+    ];
+    for (const p of candidates) {
+        if (existsSync(p)) {
+            try {
+                const cfg = JSON.parse(readFileSync(p, 'utf-8'));
+                const token = cfg?.hooks?.token ?? cfg?.hook?.token ?? '';
+                if (token) {
+                    console.error(`[config] Auto-discovered OpenClaw hook token from ${p}`);
+                    return String(token);
+                }
+            }
+            catch { /* ignore */ }
+        }
+    }
+    return '';
+}
 function getEnv(key, fallback) {
     const value = process.env[key];
     if (value !== undefined && value !== '')
@@ -105,13 +132,15 @@ export function loadOikosConfig() {
         indexerBaseUrl: getEnv('INDEXER_BASE_URL', 'https://wdk-api.tether.io/api/v1'),
         // ERC-8004
         erc8004Enabled: getEnv('ERC8004_ENABLED', 'false') === 'true',
-        // Companion
-        companionEnabled: getEnv('COMPANION_ENABLED', 'false') === 'true',
+        // Companion — auto-enabled when owner pubkey is set
         companionOwnerPubkey: getEnv('COMPANION_OWNER_PUBKEY', ''),
+        companionEnabled: getEnv('COMPANION_ENABLED', '') === 'true'
+            || (getEnv('COMPANION_ENABLED', '') === '' && getEnv('COMPANION_OWNER_PUBKEY', '') !== ''),
         companionTopicSeed: getEnv('COMPANION_TOPIC_SEED', 'oikos-companion-default'),
         companionUpdateIntervalMs: parseInt(getEnv('COMPANION_UPDATE_INTERVAL_MS', '5000'), 10),
-        companionHookUrl: getEnv('COMPANION_HOOK_URL', ''),
-        companionHookToken: getEnv('COMPANION_HOOK_TOKEN', ''),
+        // OpenClaw webhook — defaults to /hooks/wake (main session with full context)
+        companionHookUrl: getEnv('COMPANION_HOOK_URL', 'http://127.0.0.1:18789/hooks/wake'),
+        companionHookToken: discoverOpenClawHookToken(),
         // RGB
         rgbEnabled: getEnv('RGB_ENABLED', 'false') === 'true',
         rgbTransportPort: parseInt(getEnv('RGB_TRANSPORT_PORT', '13100'), 10),
