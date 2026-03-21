@@ -568,7 +568,7 @@ async function updatePolicies () {
       html += '</div></div>'
       if (desc) html += '<div class="strat-desc">' + escapeHtml(desc) + '</div>'
       if (isPending) {
-        html += '<div class="strat-approval-btns"><button class="strat-approve">Approve</button><button class="strat-reject">Reject</button></div>'
+        html += '<div class="strat-approval-btns"><button class="strat-approve" data-id="' + escapeHtml(s.id) + '">Approve</button><button class="strat-reject" data-id="' + escapeHtml(s.id) + '">Reject</button></div>'
       }
       html += '</div>'
       return html
@@ -770,6 +770,42 @@ document.addEventListener('click', function (e) {
       toggle.textContent = currentlyEnabled ? 'ON' : 'OFF'
     }
     updatePolicies()
+  })
+})
+
+// Strategy approve (delegated) — enable the agent-proposed strategy
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('.strat-approve')
+  if (!btn) return
+  e.stopPropagation()
+  var id = btn.dataset.id
+  btn.textContent = '...'
+  btn.disabled = true
+  apiPost('/api/strategies/toggle', { filename: id, enabled: true }).then(function (result) {
+    if (result && result.success) {
+      updatePolicies()
+    } else {
+      btn.textContent = 'Approve'
+      btn.disabled = false
+    }
+  })
+})
+
+// Strategy reject (delegated) — delete the agent-proposed strategy
+document.addEventListener('click', function (e) {
+  var btn = e.target.closest('.strat-reject')
+  if (!btn) return
+  e.stopPropagation()
+  var id = btn.dataset.id
+  btn.textContent = '...'
+  btn.disabled = true
+  apiPost('/api/strategies/delete', { filename: id }).then(function (result) {
+    if (result && result.success) {
+      updatePolicies()
+    } else {
+      btn.textContent = 'Reject'
+      btn.disabled = false
+    }
   })
 })
 
