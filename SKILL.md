@@ -24,7 +24,7 @@ You (agent) ──CLI/MCP──> Dashboard ──IPC──> Wallet Isolate (keys
 
 Oikos installs two companion skills alongside this one. They are auto-loaded by OpenClaw on your next session. **Read them before operating the wallet:**
 
-- **`wdk-wallet`** — Full MCP tool reference (26 tools), wallet operations, DeFi, swarm marketplace
+- **`wdk-wallet`** — Full MCP tool reference (30 tools), wallet operations, DeFi, swarm marketplace, companion
 - **`policy-engine`** — Policy architecture, 16 guardrail modules, confirmation tiers, error taxonomy
 
 After install, find them in `~/.openclaw/workspace/skills/` or in the repo at `skills/`.
@@ -187,7 +187,7 @@ Use `--port <n>` if not on default 3420. Use `--json` for piping.
 
 **Endpoint:** `POST http://127.0.0.1:3420/mcp` (JSON-RPC 2.0)
 
-For full tool reference (26 tools, args, examples), read: `skills/wdk-wallet/SKILL.md`
+For full tool reference (30 tools, args, examples), read: `skills/wdk-wallet/SKILL.md`
 
 #### Essential Read-Only Tools
 
@@ -219,6 +219,19 @@ For full tool reference (26 tools, args, examples), read: `skills/wdk-wallet/SKI
 | `swarm_accept_bid` | `announcementId` |
 | `swarm_submit_payment` | `announcementId` |
 | `swarm_deliver_result` | `announcementId`, `result`, `filename` |
+
+#### Companion (Pear App) Channel
+
+Messages from the Oikos Pear App arrive as system events prefixed with `[oikos-companion]`. When you see this prefix:
+
+1. The message is from the wallet owner via the Pear App
+2. Reply via `companion_reply` MCP tool to send the response back to the Pear App
+3. Also reply normally on your messaging channel (Telegram, etc.)
+
+| Tool | What it does |
+|------|-------------|
+| `companion_read` | Read buffered companion messages |
+| `companion_reply` | Send a reply back to the Pear App |
 
 ### Deal Flows
 
