@@ -4,8 +4,9 @@ node_modules/
 # Build output
 dist/
 *.js.map
-*.d.ts
 *.d.ts.map
+# Ignore generated .d.ts in dist/ but allow hand-written declarations in src/
+!**/src/**/*.d.ts
 
 # Environment and secrets
 .env
