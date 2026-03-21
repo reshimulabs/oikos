@@ -144,18 +144,24 @@ export class CompanionCoordinator {
       this._onConnection(socket);
     });
 
-    const discovery = this.hyperswarm.join(this.companionTopic, {
-      server: true,
-      client: false,
-    });
-    await discovery.flushed();
+    // When sharing the swarm's Hyperswarm, the board topic is already joined.
+    // The companion piggybacks on board connections via protomux — no separate topic needed.
+    if (!this.isSharedSwarm) {
+      const discovery = this.hyperswarm.join(this.companionTopic, {
+        server: true,
+        client: false,
+      });
+      await discovery.flushed();
+      console.error(`[companion] Listening on companion topic: ${this.companionTopic.toString('hex').slice(0, 16)}...`);
+    } else {
+      console.error(`[companion] Piggyback on swarm board (shared Hyperswarm, no separate topic)`);
+    }
 
     this.updateInterval = setInterval(() => {
       void this._pushStateUpdate();
     }, this.config.updateIntervalMs);
 
     this.started = true;
-    console.error(`[companion] Listening. Topic: ${this.companionTopic.toString('hex').slice(0, 16)}...`);
     console.error(`[companion] Authorized owner: ${this.config.ownerPubkey.slice(0, 16)}...`);
   }
 

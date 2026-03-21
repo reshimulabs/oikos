@@ -34,6 +34,21 @@ import c from 'compact-encoding'
 
 const INTERNAL_PORT = 13421
 
+// Prevent uncaught Hyperswarm errors (ETIMEDOUT, etc.) from crashing the Pear app
+if (typeof Bare !== 'undefined') {
+  Bare.on('uncaughtException', (err) => {
+    console.log('[companion] Uncaught error (recovered):', err.message || err)
+    console.log('[companion] Stack:', err.stack || 'no stack')
+  })
+}
+
+// Also catch on server errors
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('error', (e) => {
+    console.log('[companion] Global error:', e.message || e)
+  })
+}
+
 // ── State cache (updated by companion channel messages) ──
 
 const state = {
@@ -212,15 +227,15 @@ function handleAgentMessage (buf) {
 async function connectToAgent () {
   if (!agentPubkey) return
 
-  const ownerPubkeyBuf = keypair.publicKey
-  const companionTopic = b4a.alloc(32)
-  sodium.crypto_generichash(
-    companionTopic,
-    b4a.from('oikos-companion-v0:' + topicSeed),
-    ownerPubkeyBuf
-  )
+  // Use the BOARD topic — same as the swarm. This piggybacks the companion
+  // channel on the existing swarm connection (already NAT-traversed, relay-bridged).
+  // protomux multiplexes: swarm uses oikos/board, we use oikos/companion, same socket.
+  const swarmId = env.SWARM_ID || 'oikos-hackathon-v1'
+  const boardKey = b4a.from('oikos-board-v0--')  // 16 bytes, matches topic.ts
+  const boardTopic = b4a.alloc(32)
+  sodium.crypto_generichash(boardTopic, b4a.from(swarmId), boardKey)
 
-  console.log('[companion] Topic:', b4a.toString(companionTopic, 'hex').slice(0, 16) + '...')
+  console.log('[companion] Board topic:', b4a.toString(boardTopic, 'hex').slice(0, 16) + '...')
   console.log('[companion] Looking for agent:', agentPubkey.slice(0, 16) + '...')
 
   const swarmOpts = { keyPair: keypair }
@@ -242,12 +257,22 @@ async function connectToAgent () {
     } catch { /* non-fatal */ }
   }
 
+  // Catch uncaught errors on swarm to prevent crashes
+  swarm.on('error', (err) => {
+    console.log('[companion] Swarm error (non-fatal):', err.message || err)
+  })
+
   swarm.on('connection', (socket) => {
     const remotePubkey = socket.remotePublicKey
     if (!remotePubkey) return
 
     const remoteHex = b4a.toString(remotePubkey, 'hex')
     console.log('[companion] Connected to:', remoteHex.slice(0, 16) + '...')
+
+    // Catch socket errors to prevent uncaught ETIMEDOUT crashes
+    socket.on('error', (err) => {
+      console.log('[companion] Socket error (non-fatal):', err.message || err)
+    })
 
     // Only open companion channel with the expected agent, not relay or other peers
     if (remoteHex !== agentPubkey) {
@@ -278,7 +303,7 @@ async function connectToAgent () {
     socket.on('close', () => {
       state.connected = false
       companionMessage = null
-      console.log('[companion] Disconnected. Reconnecting...')
+      console.log('[companion] Disconnected. Will reconnect via DHT...')
     })
 
     // Ping to trigger immediate state push from agent
@@ -286,7 +311,7 @@ async function connectToAgent () {
     console.log('[companion] Channel open. Receiving state updates.')
   })
 
-  const discovery = swarm.join(companionTopic, { server: false, client: true })
+  const discovery = swarm.join(boardTopic, { server: false, client: true })
   await discovery.flushed()
   console.log('[companion] Joined topic. Searching for agent...')
 }
@@ -808,6 +833,10 @@ const server = http.createServer(async (req, res) => {
 
   // 404
   json(res, { error: 'not found' }, 404)
+})
+
+server.on('error', (err) => {
+  console.log('[companion] HTTP server error:', err.message || err)
 })
 
 server.listen(INTERNAL_PORT, '127.0.0.1', () => {
