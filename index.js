@@ -468,7 +468,7 @@ const server = http.createServer(async (req, res) => {
     if ((!state.addresses || state.addresses.length === 0) && walletUrl) {
       try {
         const data = await httpGet(walletUrl + '/api/addresses')
-        if (data) return json(res, data)
+        if (data && Array.isArray(data.addresses)) return json(res, data)
       } catch (e) { /* fall through */ }
     }
     return json(res, { addresses: state.addresses || [] })
