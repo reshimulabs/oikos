@@ -135,6 +135,15 @@ export interface CompanionStrategyUpdate {
   timestamp: number;
 }
 
+/** Request to update policy rules via protomux */
+export interface CompanionPolicySave {
+  type: 'policy_save';
+  rules: unknown[];
+  name?: string;
+  requestId: string;
+  timestamp: number;
+}
+
 /** Response to a strategy save/toggle request */
 export interface CompanionStrategyResult {
   type: 'strategy_result';
@@ -142,6 +151,23 @@ export interface CompanionStrategyResult {
   success: boolean;
   filename?: string;
   action?: string;
+  error?: string;
+  timestamp: number;
+}
+
+/** Audit trail entries pushed to companion */
+export interface CompanionAuditUpdate {
+  type: 'audit_update';
+  entries: Array<Record<string, unknown>>;
+  timestamp: number;
+}
+
+/** Response to a policy save request */
+export interface CompanionPolicyResult {
+  type: 'policy_result';
+  requestId: string;
+  success: boolean;
+  rulesCount?: number;
   error?: string;
   timestamp: number;
 }
@@ -160,7 +186,9 @@ export type AgentToCompanionMessage =
   | CompanionApprovalRequest
   | CompanionChatReply
   | CompanionStrategyUpdate
-  | CompanionStrategyResult;
+  | CompanionStrategyResult
+  | CompanionPolicyResult
+  | CompanionAuditUpdate;
 
 /** Messages sent FROM the companion TO the agent */
 export type CompanionToAgentMessage =
@@ -168,7 +196,8 @@ export type CompanionToAgentMessage =
   | CompanionApprovalResponse
   | CompanionPing
   | CompanionStrategySave
-  | CompanionStrategyToggle;
+  | CompanionStrategyToggle
+  | CompanionPolicySave;
 
 /** All companion messages */
 export type CompanionMessage = AgentToCompanionMessage | CompanionToAgentMessage;

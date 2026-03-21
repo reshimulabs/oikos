@@ -32,6 +32,7 @@ import type {
   CompanionExecutionNotify,
   CompanionChatReply,
   CompanionStrategyResult,
+  CompanionPolicyResult,
 } from './types.js';
 
 /** State provider — decoupled from any specific brain implementation */
@@ -41,6 +42,8 @@ export interface CompanionStateProvider {
   getAddresses?(): Promise<Array<{ chain: string; address: string }>>;
   getPrices?(): Promise<Array<{ symbol: string; priceUsd: number; source: string; updatedAt: number }>>;
   getStrategies?(): Promise<Array<{ filename: string; enabled: boolean; source: string; content: string }>>;
+  getAudit?(): Promise<Array<Record<string, unknown>>>;
+  restartWallet?(): Promise<void>;
 }
 
 export interface CompanionConfig {
@@ -309,6 +312,9 @@ export class CompanionCoordinator {
         case 'strategy_toggle':
           this._handleStrategyToggle(msg.requestId, msg.filename, msg.enabled);
           break;
+        case 'policy_save':
+          void this._handlePolicySave(msg.requestId, msg.rules, msg.name);
+          break;
         default:
           console.error(`[companion] Unknown message type: ${(msg as { type: string }).type}`);
       }
@@ -373,6 +379,53 @@ export class CompanionCoordinator {
     }
   }
 
+  /** Handle policy save request from companion — write policies.json and restart wallet */
+  private async _handlePolicySave(requestId: string, rules: unknown[], name?: string): Promise<void> {
+    try {
+      if (!rules || !Array.isArray(rules) || rules.length === 0) {
+        this.send({ type: 'policy_result', requestId, success: false, error: 'non-empty rules array required', timestamp: Date.now() } satisfies CompanionPolicyResult);
+        return;
+      }
+
+      // Find policies.json (same paths as dashboard/server.ts)
+      const configPaths = [
+        join(process.cwd(), 'policies.json'),
+        join(process.cwd(), '..', 'policies.json'),
+      ];
+      let configPath = configPaths.find(p => existsSync(p));
+      if (!configPath) configPath = configPaths[0] as string;
+
+      // Read existing or create default
+      const config = existsSync(configPath)
+        ? JSON.parse(readFileSync(configPath, 'utf-8')) as { policies: Array<{ id: string; name: string; rules: unknown[] }> }
+        : { policies: [{ id: 'default', name: 'Default Policy', rules: [] as unknown[] }] };
+
+      // Update first policy's rules
+      if (config.policies?.[0]) {
+        config.policies[0].rules = rules;
+        if (name) config.policies[0].name = name;
+      }
+
+      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      console.error(`[companion] Updated policy config: ${rules.length} rules`);
+
+      // Restart wallet isolate to load new policies (preserves immutability guarantee)
+      if (this.stateProvider.restartWallet) {
+        await this.stateProvider.restartWallet();
+        console.error('[companion] Wallet isolate restarted with new policy');
+      }
+
+      this.send({ type: 'policy_result', requestId, success: true, rulesCount: rules.length, timestamp: Date.now() } satisfies CompanionPolicyResult);
+
+      // Push fresh state after restart
+      void this._pushStateUpdate();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[companion] Policy save error: ${msg}`);
+      this.send({ type: 'policy_result', requestId, success: false, error: msg, timestamp: Date.now() } satisfies CompanionPolicyResult);
+    }
+  }
+
   private async _pushStateUpdate(): Promise<void> {
     if (!this.connected) return;
 
@@ -434,6 +487,16 @@ export class CompanionCoordinator {
         const strategies = await this.stateProvider.getStrategies();
         this.send({ type: 'strategy_update', strategies, timestamp: Date.now() });
       } catch { /* strategies dir may not exist */ }
+    }
+
+    // Audit trail (from wallet IPC)
+    if (this.stateProvider.getAudit) {
+      try {
+        const entries = await this.stateProvider.getAudit();
+        if (entries.length > 0) {
+          this.send({ type: 'audit_update', entries, timestamp: Date.now() });
+        }
+      } catch { /* wallet may not be ready */ }
     }
 
     // Swarm status (with full data for UI rendering)

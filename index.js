@@ -65,6 +65,7 @@ const state = {
   prices: [],
   addresses: [],
   strategies: [],
+  auditEntries: [],
   lastUpdate: 0,
 }
 
@@ -189,6 +190,9 @@ function handleAgentMessage (buf) {
         state.executions.push(msg.result)
         if (state.executions.length > 50) state.executions.shift()
         break
+      case 'audit_update':
+        state.auditEntries = msg.entries || []
+        break
       case 'approval_request':
         state.approvalRequests.push(msg)
         break
@@ -232,6 +236,11 @@ function handleAgentMessage (buf) {
         }))
         break
       case 'strategy_result': {
+        const cb = pendingRequests.get(msg.requestId)
+        if (cb) { pendingRequests.delete(msg.requestId); cb(msg) }
+        break
+      }
+      case 'policy_result': {
         const cb = pendingRequests.get(msg.requestId)
         if (cb) { pendingRequests.delete(msg.requestId); cb(msg) }
         break
@@ -536,9 +545,19 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (url === '/api/policies' && req.method === 'POST') {
+    const body = await readBody(req)
+    // Protomux first when connected — modify remote agent's policies
+    if (companionMessage) {
+      const requestId = 'pr-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6)
+      const result = await sendProtomuxRequest({
+        type: 'policy_save', rules: body.rules, name: body.name,
+        requestId, timestamp: Date.now()
+      }, 15000) // longer timeout — includes wallet restart
+      return json(res, result)
+    }
+    // Fall back to local wallet HTTP
     if (walletUrl) {
       try {
-        const body = await readBody(req)
         const data = await httpPost(walletUrl + '/api/policies', body)
         return json(res, data || { error: 'No response from wallet' })
       } catch (e) {
@@ -618,7 +637,9 @@ const server = http.createServer(async (req, res) => {
   if (url.startsWith('/api/audit')) {
     // When connected to remote agent, ONLY show protomux data (never local wallet)
     if (state.connected) {
-      return json(res, { entries: state.executions })
+      // Prefer full audit trail from audit_update; fall back to execution notifications
+      const entries = state.auditEntries.length > 0 ? state.auditEntries : state.executions
+      return json(res, { entries })
     }
     // Only fall back to local wallet HTTP when NOT connected
     if (walletUrl) {

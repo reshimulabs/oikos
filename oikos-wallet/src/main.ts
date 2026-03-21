@@ -242,6 +242,23 @@ async function main(): Promise<void> {
         }
         return strategies;
       },
+      getAudit: async () => {
+        const result = await wallet.queryAudit();
+        return result as unknown as Array<Record<string, unknown>>;
+      },
+      restartWallet: async () => {
+        console.error('[companion] Restarting wallet isolate for policy update...');
+        wallet.stop();
+        await new Promise(r => setTimeout(r, 500));
+        wallet.start(walletPath, config.walletRuntime, {
+          MOCK_WALLET: config.mockWallet ? 'true' : 'false',
+          POLICY_FILE: config.policyFile,
+          AUDIT_LOG_PATH: config.auditLogPath,
+        });
+        // Wait for isolate to initialize
+        await new Promise(r => setTimeout(r, 3000));
+        console.error('[companion] Wallet isolate restarted with updated policy');
+      },
     };
 
     companion = new CC(wallet, stateProvider, {
