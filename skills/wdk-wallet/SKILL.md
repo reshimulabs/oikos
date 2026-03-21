@@ -86,19 +86,25 @@ You NEVER touch keys. You propose, the wallet evaluates policy and signs.
 | `x402_fetch` | Fetch URL with auto-pay (HTTP 402) | `url`, `method` (optional), `body` (optional) |
 | `x402_status` | Economics: total spent, services paid | — |
 
-### Companion (Oikos App ↔ Agent Bridge)
+### Companion (Pear App) Channel
+
+Messages from the Oikos Pear App arrive as system events prefixed with `[oikos-companion]`. When you see this prefix:
+
+1. The message is from the wallet owner via the Pear App
+2. Reply via `companion_reply` MCP tool to send the response back to the Pear App
+3. Also reply normally on your messaging channel (Telegram, etc.)
 
 | Tool | What it does | Required args |
 |------|-------------|---------------|
-| `companion_read` | Poll pending instructions from the Oikos App | `clear` (optional, default true) |
-| `companion_reply` | Send a reply back to the Oikos App | `text`, `brainName` (optional) |
+| `companion_read` | Read buffered companion messages | `clear` (optional, default true) |
+| `companion_reply` | Send a reply back to the Pear App | `text`, `brainName` (optional) |
 
-The human owner uses the Oikos App (Pear Runtime) to send instructions to you via an encrypted P2P channel. Those instructions queue up in the wallet infrastructure. **You must poll `companion_read` periodically** to check for new instructions and respond via `companion_reply`.
-
+**Example:**
 ```
-Oikos App (human) → protomux P2P → instructions queue
-You (agent)       → companion_read → get instruction
-You (agent)       → companion_reply → protomux P2P → Oikos App (human)
+System event: `[oikos-companion] What's my balance?`
+  -> Check balance via `wallet_balance_all`
+  -> Reply via `companion_reply` with the result
+  -> Also reply on Telegram
 ```
 
 ### RGB (Bitcoin-native tokens) *(planned — not yet available via MCP)*
