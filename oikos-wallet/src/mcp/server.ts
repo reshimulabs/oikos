@@ -519,7 +519,9 @@ const handlers: Record<string, ToolHandler> = {
       reason: params['reason'] as string, confidence: params['confidence'] as number,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
-    return svc.wallet.proposePayment(proposal, 'mcp');
+    const result = await svc.wallet.proposePayment(proposal, 'mcp');
+    if (svc.companion && result) svc.companion.notifyExecution(result as import('../ipc/types.js').ExecutionResult);
+    return result;
   },
   async propose_swap(params, svc) {
     const symbol = params['symbol'] as TokenSymbol;
@@ -529,7 +531,9 @@ const handlers: Record<string, ToolHandler> = {
       reason: params['reason'] as string, confidence: params['confidence'] as number,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
-    return svc.wallet.proposeSwap(proposal, 'mcp');
+    const result = await svc.wallet.proposeSwap(proposal, 'mcp');
+    if (svc.companion && result) svc.companion.notifyExecution(result as import('../ipc/types.js').ExecutionResult);
+    return result;
   },
   async propose_bridge(params, svc) {
     const symbol = params['symbol'] as TokenSymbol;
@@ -540,7 +544,9 @@ const handlers: Record<string, ToolHandler> = {
       reason: params['reason'] as string, confidence: params['confidence'] as number,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
-    return svc.wallet.proposeBridge(proposal, 'mcp');
+    const result = await svc.wallet.proposeBridge(proposal, 'mcp');
+    if (svc.companion && result) svc.companion.notifyExecution(result as import('../ipc/types.js').ExecutionResult);
+    return result;
   },
   async propose_yield(params, svc) {
     const symbol = params['symbol'] as TokenSymbol;
@@ -551,7 +557,9 @@ const handlers: Record<string, ToolHandler> = {
       reason: params['reason'] as string, confidence: params['confidence'] as number,
       strategy: 'mcp-tool', timestamp: Date.now(),
     };
-    return svc.wallet.proposeYield(proposal, 'mcp');
+    const result = await svc.wallet.proposeYield(proposal, 'mcp');
+    if (svc.companion && result) svc.companion.notifyExecution(result as import('../ipc/types.js').ExecutionResult);
+    return result;
   },
   async policy_status(_params, svc) {
     return { policies: await svc.wallet.queryPolicy() };
