@@ -16,7 +16,6 @@ import { WalletIPCClient } from './ipc/client.js';
 import { loadOikosConfig } from './config/env.js';
 import { createDashboard } from './dashboard/server.js';
 import { EventBus } from './events/bus.js';
-import { getDemoCreators, getDefaultCreator } from './creators/registry.js';
 import { PricingService } from './pricing/client.js';
 import { resolve } from 'path';
 import type { OikosServices, IdentityState, CompanionInstruction, SwarmInterface } from './types.js';
@@ -292,7 +291,7 @@ async function main(): Promise<void> {
     console.error(`[oikos] Companion: listening for owner`);
   }
 
-  // 7. Bootstrap ERC-8004 identity (if enabled)
+  // 7. Bootstrap ERC-8004 identity (always-on, lazy registration when funded)
   const identity: IdentityState = {
     registered: false,
     agentId: null,
@@ -301,44 +300,17 @@ async function main(): Promise<void> {
     registrationTxHash: null,
   };
 
-  if (config.erc8004Enabled) {
-    try {
-      const creators = getDemoCreators();
-      const defaultCreator = getDefaultCreator(creators, 'ethereum');
-      if (defaultCreator) {
-        const agentURI = `http://127.0.0.1:${config.dashboardPort}/agent-card.json`;
-        const regResult = await wallet.registerIdentity(agentURI);
-        if (regResult.status === 'registered') {
-          identity.registered = true;
-          identity.agentId = regResult.agentId ?? null;
-          identity.registrationTxHash = regResult.txHash ?? null;
-          identity.agentURI = agentURI;
+  const { LazyRegistrar } = await import('./identity/lazy-register.js');
 
-          // Set wallet (deadline: 1 hour from now)
-          const deadline = Math.floor(Date.now() / 1000) + 3600;
-          const walletResult = await wallet.setAgentWallet(identity.agentId ?? '', deadline);
-          identity.walletSet = walletResult.status === 'wallet_set';
-        }
-      }
-    } catch (err) {
-      console.error('[oikos] ERC-8004 bootstrap failed:', err);
-    }
-    console.error(`[oikos] ERC-8004: ${identity.registered ? `registered (agentId: ${identity.agentId ?? 'unknown'})` : 'disabled'}`);
-
-    // Propagate ERC-8004 agentId to swarm (for heartbeats + peer discovery)
-    if (identity.registered && identity.agentId && swarm?.updateErc8004AgentId) {
-      swarm.updateErc8004AgentId(identity.agentId);
-    }
-  }
-
-  // 7b. Bootstrap ERC-8004 Reputation Bridge (auto-feedback after settlements)
+  // Helper: bootstrap reputation bridge once identity is registered
   let reputationBridge: import('./reputation/bridge.js').ReputationBridge | null = null;
 
-  if (config.erc8004Enabled && identity.registered && swarm) {
-    const { ReputationBridge } = await import('./reputation/bridge.js');
-    const autoFeedback = process.env['AUTO_FEEDBACK_ENABLED'] !== 'false'; // default: true
+  const bootstrapBridge = async (): Promise<void> => {
+    if (reputationBridge || !identity.registered || !swarm) return;
 
-    // Peer lookup uses the swarm's known peers
+    const { ReputationBridge } = await import('./reputation/bridge.js');
+    const autoFeedback = process.env['AUTO_FEEDBACK_ENABLED'] !== 'false';
+
     const peerLookup: import('./reputation/bridge.js').PeerLookup = {
       getErc8004AgentId: (peerPubkey: string) => {
         const state = swarm!.getState();
@@ -351,7 +323,6 @@ async function main(): Promise<void> {
       },
     };
 
-    // Get wallet address for feedback file clientAddress
     let walletAddress = '';
     try {
       const addr = await wallet.queryAddress('ethereum');
@@ -365,17 +336,58 @@ async function main(): Promise<void> {
     }, peerLookup, {
       enabled: autoFeedback,
       dashboardBaseUrl: `http://127.0.0.1:${config.dashboardPort}`,
-      rateLimit: 1, // max 1 feedback per peer per hour
+      rateLimit: 1,
     });
 
-    // Wire settlement events to the bridge
     swarm.onEvent((event) => {
       if (event.kind === 'settlement_completed') {
         void reputationBridge!.onSettlement(event);
       }
     });
 
-    console.error(`[oikos] ERC-8004 Reputation Bridge: ${autoFeedback ? 'active' : 'disabled'} (auto-feedback after settlements)`);
+    console.error(`[erc8004] Reputation Bridge: ${autoFeedback ? 'active' : 'disabled'}`);
+  };
+
+  const registrar = new LazyRegistrar(wallet, identity, {
+    identityPath: config.identityPath,
+    dashboardPort: config.dashboardPort,
+    dashboardHost: config.dashboardHost,
+  }, {
+    onRegistered: (id) => {
+      // Propagate to swarm
+      if (id.agentId && swarm?.updateErc8004AgentId) {
+        swarm.updateErc8004AgentId(id.agentId);
+      }
+      // Bootstrap reputation bridge (deferred until identity exists)
+      void bootstrapBridge();
+    },
+  });
+
+  // Try loading persisted identity first
+  if (registrar.tryLoad()) {
+    // Already registered from a previous session
+    if (identity.agentId && swarm?.updateErc8004AgentId) {
+      swarm.updateErc8004AgentId(identity.agentId);
+    }
+    void bootstrapBridge();
+  } else {
+    // Try registering now (if funded), otherwise start watcher
+    const registered = await registrar.tryRegister();
+    if (!registered) {
+      registrar.startWatcher();
+
+      // Opportunistic trigger: try registering on any incoming transfer event
+      eventBus.onEvents((events) => {
+        if (identity.registered) return;
+        const hasIncoming = events.some((e) => {
+          const data = e.data as unknown as Record<string, unknown> | undefined;
+          return data?.['type'] === 'donation' || data?.['type'] === 'incoming_transfer';
+        });
+        if (hasIncoming) {
+          void registrar.tryRegister();
+        }
+      });
+    }
   }
 
   // 8. Start RGB transport bridge (if enabled)

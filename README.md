@@ -253,7 +253,7 @@ Copy `.env.example` to `.env` and configure:
 | `MOCK_LLM` | `false` | Enable deterministic mock mode |
 | `MOCK_EVENTS` | `true` | Use fixture event data |
 | `DASHBOARD_PORT` | `3420` | Dashboard HTTP port |
-| `ERC8004_ENABLED` | `false` | Enable on-chain identity registration |
+| `IDENTITY_PATH` | `.oikos-identity.json` | ERC-8004 identity persistence file (always-on, lazy registration) |
 | `COMPANION_ENABLED` | `false` | Enable P2P companion channel |
 
 ## Track 1 Requirements

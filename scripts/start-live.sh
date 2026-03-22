@@ -98,7 +98,6 @@ exec env \
   MOCK_SWARM=false \
   MOCK_EVENTS=true \
   SWARM_ENABLED=true \
-  ERC8004_ENABLED=false \
   RGB_ENABLED=false \
   WALLET_RUNTIME="$WALLET_RUNTIME" \
   WALLET_ISOLATE_PATH="./wallet-isolate/dist/src/main.js" \

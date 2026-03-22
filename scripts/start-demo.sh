@@ -88,7 +88,6 @@ cd "$PROJECT_DIR"
 exec env \
   OIKOS_MODE=mock \
   SWARM_ENABLED=true \
-  ERC8004_ENABLED=true \
   RGB_ENABLED=true \
   WALLET_RUNTIME="$WALLET_RUNTIME" \
   WALLET_ISOLATE_PATH="./wallet-isolate/dist/src/main.js" \

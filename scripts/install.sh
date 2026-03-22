@@ -270,14 +270,7 @@ configure() {
     MOCK_SWARM="false"
   fi
 
-  # --- ERC-8004 ---
-  echo ""
-  ask "Enable ERC-8004 on-chain identity? [y/N]: "
-  read -r ERC_CHOICE
-  ERC8004_ENABLED="false"
-  if [[ "${ERC_CHOICE,,}" == "y" ]]; then
-    ERC8004_ENABLED="true"
-  fi
+  # ERC-8004 identity is always-on (lazy registration when funded)
 
   # --- Companion ---
   echo ""
@@ -337,8 +330,8 @@ AGENT_CAPABILITIES="payment,swap,bridge,yield,analysis"
 # === DASHBOARD ===
 DASHBOARD_PORT="${DASHBOARD_PORT}"
 
-# === ERC-8004 ===
-ERC8004_ENABLED="${ERC8004_ENABLED}"
+# === ERC-8004 (always-on, lazy registration when funded) ===
+# IDENTITY_PATH=".oikos-identity.json"
 
 # === COMPANION ===
 COMPANION_ENABLED="${COMPANION_ENABLED}"

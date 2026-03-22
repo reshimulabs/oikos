@@ -239,7 +239,7 @@ For full tool reference (args, examples), read: `skills/wdk-wallet/SKILL.md`
 
 Oikos supports on-chain identity on Sepolia via the ERC-8004 Trustless Agents standard. When enabled, this becomes your **universal reputation anchor** — all activity across all chains (BTC, Lightning, EVM, x402) feeds into on-chain reputation via tagged feedback.
 
-**Requires `ERC8004_ENABLED=true`** in `.env` (or passed as env var at startup). Disabled by default. Check status with `identity_state`.
+Registration happens automatically when the wallet first has enough ETH for gas (~0.001 ETH on Sepolia). Until then, the agent operates with off-chain reputation only. Identity persists across restarts (`.oikos-identity.json`). Check status with `identity_state`.
 
 **When enabled, what happens automatically:**
 - Identity is registered at startup (ERC-721 NFT minted, agentId assigned)
@@ -337,7 +337,7 @@ Quick reference:
 - **Bridges are async**: L2→L1 can take minutes.
 - **swarm_announce categories**: Only `buyer`, `seller`, `auction`.
 - **Seeds/keys are inaccessible**: Exist only in the Wallet Isolate. You will never see them.
-- **Reputation feedback is automatic** (when `ERC8004_ENABLED=true`): After swarm settlements, on-chain feedback is submitted automatically. Don't submit feedback manually unless the human asks you to.
+- **Reputation feedback is automatic**: After swarm settlements, on-chain feedback is submitted automatically once identity is registered. Don't submit feedback manually unless the human asks you to.
 - **Policies are immutable at runtime**: Loaded once at startup. To change policies, edit `policies.json` and **restart the wallet**. This is a security guarantee.
 - **Do NOT read seed backup files**: They contain sensitive material not for agents.
 - **Use absolute paths for CLI**: `"$HOME/.oikos/bin/oikos"` — not `oikos` (PATH may not be set).

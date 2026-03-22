@@ -11,7 +11,7 @@
  * tagged on-chain feedback entries, queryable via getSummary(agentId, [], tag1, tag2).
  *
  * Rate limiting: max 1 feedback per peer per hour (gas conservation).
- * Config: AUTO_FEEDBACK_ENABLED env var (default: true when ERC8004_ENABLED=true).
+ * Config: AUTO_FEEDBACK_ENABLED env var (default: true). Bridge activates when identity is registered.
  *
  * @see https://eips.ethereum.org/EIPS/eip-8004
  */
