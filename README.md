@@ -52,7 +52,7 @@ This isn't a chatbot with a wallet plugin — it's **wallet infrastructure**. Ag
 Point your agent at the skill file. It covers setup, seed generation, wallet startup, MCP tools, and policy configuration.
 
 ```
-skills/wdk-wallet/SKILL.md
+SKILL.md
 ```
 
 Or connect via any integration surface:
@@ -175,7 +175,7 @@ A sovereign desktop application built on Pear Runtime. No servers, no cloud — 
 
 | Surface | Protocol | Use Case |
 |---------|----------|----------|
-| **OpenClaw Skill** | `skills/wdk-wallet/SKILL.md` | Any OpenClaw agent gets wallet capabilities |
+| **OpenClaw Skill** | `SKILL.md` | Any OpenClaw agent gets wallet capabilities |
 | **MCP Server** | 21 tools via JSON-RPC 2.0 | Any MCP-compatible agent framework |
 | **CLI** | `oikos` commands | Shell agents, human operators, scripting |
 | **Direct IPC** | stdin/stdout JSON-lines | Embedded use in custom agent processes |
