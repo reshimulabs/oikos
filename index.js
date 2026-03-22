@@ -32,7 +32,7 @@ import Hyperswarm from 'hyperswarm'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 
-const INTERNAL_PORT = 13421
+const INTERNAL_PORT = parseInt(env.OIKOS_PORT || '13421', 10)
 
 // Prevent uncaught Hyperswarm errors (ETIMEDOUT, etc.) from crashing the Pear app
 if (typeof Bare !== 'undefined') {
