@@ -81,6 +81,8 @@ You NEVER touch keys. You propose, the wallet evaluates policy and signs.
 
 ### x402 Machine Payments
 
+Buy and sell HTTP API services for USDT0 micropayments. Uses EIP-3009 signed authorizations on Plasma/Stable chains. All payments are policy-enforced. Full reference: `skills/policy-engine/16-x402-payments.md`.
+
 | Tool | What it does | Required args |
 |------|-------------|---------------|
 | `x402_fetch` | Fetch URL with auto-pay (HTTP 402) | `url`, `method` (optional), `body` (optional) |

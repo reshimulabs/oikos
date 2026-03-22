@@ -81,9 +81,13 @@ export class X402Client {
             this.knownServices.push(service);
         }
     }
-    /** Get x402 economics for dashboard */
+    /** Get x402 economics snapshot for dashboard */
     getEconomics() {
         return { ...this.economics };
+    }
+    /** Get the mutable economics reference (for server-side earning tracking) */
+    getEconomicsRef() {
+        return this.economics;
     }
     /** Get known x402 services */
     getServices() {
@@ -103,7 +107,9 @@ export class X402Client {
                 // Check if payment was made (x-payment-response header)
                 const paymentResponse = response.headers.get('x-payment-response');
                 if (paymentResponse) {
-                    this._trackSpend(url, '0'); // TODO: extract actual amount from header
+                    // Use the amount from the signer's last signTypedData call
+                    const amount = this.signer.lastSignedAmount || '0';
+                    this._trackSpend(url, amount);
                     return { ok: true, status: response.status, data, paid: true, paymentResult: paymentResponse };
                 }
                 return { ok: true, status: response.status, data, paid: false };

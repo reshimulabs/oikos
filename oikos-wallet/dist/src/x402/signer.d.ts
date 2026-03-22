@@ -25,6 +25,8 @@ export declare class IPCEvmSigner {
     private wallet;
     private _address;
     private _addressPromise;
+    /** Last amount signed via signTypedData — used by X402Client for spend tracking */
+    lastSignedAmount: string;
     constructor(wallet: WalletIPCClient);
     /** Eagerly resolve and cache the wallet address */
     init(): Promise<void>;

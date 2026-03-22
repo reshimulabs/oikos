@@ -16,6 +16,7 @@
  */
 import type { Express } from 'express';
 import type { WalletIPCClient } from '../ipc/client.js';
+import type { X402Economics } from './types.js';
 /** Price in smallest units (6 decimals). 1000 = $0.001 */
 export interface X402RouteConfig {
     /** Route path (e.g., "/api/x402/price-feed") */
@@ -38,7 +39,7 @@ export declare const DEFAULT_ROUTES: X402RouteConfig[];
  * 1. With @x402/express — proper protocol with facilitator verification
  * 2. Without @x402/express — manual 402 responses (demo/fallback)
  */
-export declare function mountX402Server(app: Express, wallet: WalletIPCClient, routes?: X402RouteConfig[]): Promise<{
+export declare function mountX402Server(app: Express, wallet: WalletIPCClient, routes?: X402RouteConfig[], economics?: X402Economics): Promise<{
     mounted: boolean;
     routes: string[];
     payToAddress: string;

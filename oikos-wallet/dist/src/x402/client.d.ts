@@ -46,8 +46,10 @@ export declare class X402Client {
     }>;
     /** Register a known x402 service (for dashboard display) */
     registerService(service: X402Service): void;
-    /** Get x402 economics for dashboard */
+    /** Get x402 economics snapshot for dashboard */
     getEconomics(): X402Economics;
+    /** Get the mutable economics reference (for server-side earning tracking) */
+    getEconomicsRef(): X402Economics;
     /** Get known x402 services */
     getServices(): X402Service[];
     /** Get the signer's address */

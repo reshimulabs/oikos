@@ -49,7 +49,7 @@ export const DEFAULT_ROUTES = [
  * 1. With @x402/express — proper protocol with facilitator verification
  * 2. Without @x402/express — manual 402 responses (demo/fallback)
  */
-export async function mountX402Server(app, wallet, routes = DEFAULT_ROUTES) {
+export async function mountX402Server(app, wallet, routes = DEFAULT_ROUTES, economics) {
     // Get wallet address for receiving payments
     let payToAddress;
     try {
@@ -63,17 +63,17 @@ export async function mountX402Server(app, wallet, routes = DEFAULT_ROUTES) {
     }
     try {
         // Try proper @x402/express setup
-        return await _mountWithX402Express(app, wallet, routes, payToAddress);
+        return await _mountWithX402Express(app, wallet, routes, payToAddress, economics);
     }
     catch (err) {
         console.error('[x402-server] @x402/express not available, using manual 402 responses:', err instanceof Error ? err.message : err);
-        return _mountManual402(app, wallet, routes, payToAddress);
+        return _mountManual402(app, wallet, routes, payToAddress, economics);
     }
 }
 /**
  * Proper x402 server using @x402/express + hosted facilitator.
  */
-async function _mountWithX402Express(app, wallet, routes, payToAddress) {
+async function _mountWithX402Express(app, wallet, routes, payToAddress, economics) {
     const { paymentMiddleware, x402ResourceServer } = await import('@x402/express');
     const { ExactEvmScheme } = await import('@x402/evm/exact/server');
     const { HTTPFacilitatorClient } = await import('@x402/core/server');
@@ -106,8 +106,8 @@ async function _mountWithX402Express(app, wallet, routes, payToAddress) {
     }
     // Mount middleware on x402 routes only
     app.use(paymentMiddleware(routeMap, resourceServer));
-    // Mount actual route handlers
-    _mountRouteHandlers(app, wallet, routes);
+    // Mount actual route handlers (with earnings tracking)
+    _mountRouteHandlers(app, wallet, routes, economics);
     const routePaths = routes.map(r => `${r.method} ${r.path}`);
     console.error(`[x402-server] Mounted ${routes.length} x402 routes (facilitator: ${FACILITATOR_URL})`);
     console.error(`[x402-server] Pay-to address: ${payToAddress}`);
@@ -118,7 +118,7 @@ async function _mountWithX402Express(app, wallet, routes, payToAddress) {
  * Manual 402 fallback — returns proper 402 response body without facilitator.
  * Useful for demo/testing when facilitator is not available.
  */
-function _mountManual402(app, wallet, routes, payToAddress) {
+function _mountManual402(app, wallet, routes, payToAddress, economics) {
     for (const route of routes) {
         const handler = (req, res, next) => {
             // Check for payment header
@@ -148,8 +148,8 @@ function _mountManual402(app, wallet, routes, payToAddress) {
         else
             app.post(route.path, handler);
     }
-    // Mount actual handlers (after 402 middleware)
-    _mountRouteHandlers(app, wallet, routes);
+    // Mount actual handlers (after 402 middleware, with earnings tracking)
+    _mountRouteHandlers(app, wallet, routes, economics);
     const routePaths = routes.map(r => `${r.method} ${r.path}`);
     console.error(`[x402-server] Mounted ${routes.length} x402 routes (manual 402 fallback)`);
     return { mounted: true, routes: routePaths, payToAddress };
@@ -157,9 +157,18 @@ function _mountManual402(app, wallet, routes, payToAddress) {
 /**
  * Mount the actual service handlers that run after payment verification.
  */
-function _mountRouteHandlers(app, wallet, routes) {
+function _mountRouteHandlers(app, wallet, routes, economics) {
     for (const route of routes) {
         const handler = async (_req, res) => {
+            // Track earnings — if we reached the handler, payment was verified
+            if (economics) {
+                try {
+                    const prev = BigInt(economics.totalEarned);
+                    const earned = BigInt(route.price);
+                    economics.totalEarned = (prev + earned).toString();
+                }
+                catch { /* price not a valid BigInt — ignore */ }
+            }
             try {
                 if (route.path === '/api/x402/price-feed') {
                     // Live prices from the wallet's pricing service

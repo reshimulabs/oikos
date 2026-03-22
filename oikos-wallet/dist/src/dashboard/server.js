@@ -24,6 +24,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, unlink
 import { mountMCP, mountRemoteMCP } from '../mcp/server.js';
 import { buildWalletContext } from '../brain/adapter.js';
 import { processActions } from '../brain/actions.js';
+import { getFeedbackFile, listFeedbackIds } from '../reputation/feedback-file.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 export function createDashboard(services, port, host = '127.0.0.1') {
@@ -471,13 +472,19 @@ export function createDashboard(services, port, host = '127.0.0.1') {
     });
     // ── ERC-8004 Identity & Reputation ──
     app.get('/agent-card.json', (_req, res) => {
+        const swarmState = services.swarm?.getState();
+        const swarmIdentity = swarmState?.['identity'];
+        const swarmPubkey = swarmIdentity?.['pubkey'];
+        const swarmCapabilities = (swarmIdentity?.['capabilities'] ?? []);
         res.json({
             type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
-            name: 'Oikos Agent',
-            description: 'Autonomous AI agent with process-isolated multi-chain wallet.',
+            name: process.env['AGENT_NAME'] || 'Oikos Agent',
+            description: process.env['AGENT_DESCRIPTION'] || 'Autonomous AI agent with process-isolated multi-chain wallet on Tether runtime stack.',
+            image: process.env['AGENT_IMAGE'] || null,
             services: [
                 { name: 'MCP', endpoint: `http://127.0.0.1:${port}/mcp`, version: '2025-06-18' },
                 { name: 'web', endpoint: `http://127.0.0.1:${port}/` },
+                ...(swarmPubkey ? [{ name: 'hyperswarm', endpoint: `noise://${swarmPubkey}`, version: '1.0' }] : []),
             ],
             x402Support: true,
             active: true,
@@ -485,6 +492,18 @@ export function createDashboard(services, port, host = '127.0.0.1') {
                 ? [{ agentId: Number(services.identity.agentId), agentRegistry: 'eip155:11155111:0x8004A818BFB912233c491871b3d84c89A494BD9e' }]
                 : [],
             supportedTrust: ['reputation'],
+            capabilities: swarmCapabilities,
+        });
+    });
+    app.get('/.well-known/agent-registration.json', (_req, res) => {
+        if (!services.identity.registered || !services.identity.agentId) {
+            res.status(404).json({ error: 'Agent not registered on ERC-8004' });
+            return;
+        }
+        res.json({
+            agentId: Number(services.identity.agentId),
+            agentRegistry: 'eip155:11155111:0x8004A818BFB912233c491871b3d84c89A494BD9e',
+            agentURI: services.identity.agentURI,
         });
     });
     app.get('/api/identity', (_req, res) => {
@@ -496,12 +515,36 @@ export function createDashboard(services, port, host = '127.0.0.1') {
             return;
         }
         try {
-            const rep = await wallet.queryReputation(services.identity.agentId);
+            const tag1 = _req.query['tag1'];
+            const tag2 = _req.query['tag2'];
+            const rep = await wallet.queryReputation(services.identity.agentId, 'ethereum', { tag1: tag1 || undefined, tag2: tag2 || undefined });
             res.json({ registered: true, ...rep });
         }
         catch {
             res.status(500).json({ error: 'Failed to query on-chain reputation' });
         }
+    });
+    // ── Feedback File Hosting (ERC-8004 off-chain evidence) ──
+    /** Serve off-chain ERC-8004 feedback detail files */
+    app.get('/api/feedback/:feedbackId', (_req, res) => {
+        const file = getFeedbackFile(_req.params['feedbackId']);
+        if (!file) {
+            res.status(404).json({ error: 'Feedback file not found' });
+            return;
+        }
+        res.json(file);
+    });
+    /** List all feedback file IDs */
+    app.get('/api/feedback', (_req, res) => {
+        res.json({ feedbackIds: listFeedbackIds() });
+    });
+    // ── Reputation Bridge Stats ──
+    app.get('/api/reputation/bridge', (_req, res) => {
+        if (!services.reputationBridge) {
+            res.json({ enabled: false });
+            return;
+        }
+        res.json(services.reputationBridge.getStats());
     });
     // ── Pricing & Portfolio Valuation ──
     app.get('/api/prices', async (_req, res) => {
@@ -920,6 +963,8 @@ catch(e){r.textContent='Error: '+e.message;r.style.color='#f87171'}}</script></b
                 name: state.identity.name,
                 reputation: state.identity.reputation,
                 capabilities: state.identity.capabilities,
+                erc8004AgentId: state.identity.erc8004AgentId,
+                onChainReputation: state.identity.onChainReputation,
             },
             boardPeers: peers.map((p) => ({
                 pubkey: p.pubkey,
@@ -927,12 +972,14 @@ catch(e){r.textContent='Error: '+e.message;r.style.color='#f87171'}}</script></b
                 reputation: p.reputation,
                 capabilities: p.capabilities,
                 lastSeen: p.lastSeen,
+                erc8004AgentId: p.erc8004AgentId,
             })),
             announcements: anns.map((a) => ({
                 id: a.id,
                 agentPubkey: a.agentPubkey,
                 agentName: a.agentName,
                 reputation: a.reputation,
+                erc8004AgentId: a.erc8004AgentId,
                 category: a.category,
                 title: a.title,
                 description: a.description,
@@ -969,8 +1016,9 @@ catch(e){r.textContent='Error: '+e.message;r.style.color='#f87171'}}</script></b
     // -- x402 Resource Server (sell services behind 402 paywall) --
     const x402ServerEnabled = process.env['X402_SERVER_ENABLED'] !== 'false';
     if (x402ServerEnabled) {
+        const x402Economics = services.x402?.getEconomicsRef?.() ?? undefined;
         import('../x402/server.js').then(({ mountX402Server, mountX402Discovery, DEFAULT_ROUTES }) => {
-            mountX402Server(app, wallet).then(result => {
+            mountX402Server(app, wallet, DEFAULT_ROUTES, x402Economics).then(result => {
                 if (result.mounted) {
                     mountX402Discovery(app, DEFAULT_ROUTES ?? [], result.payToAddress);
                 }
