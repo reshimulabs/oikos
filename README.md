@@ -73,13 +73,13 @@ MCP Server · CLI · Direct IPC · Hyperswarm · x402
 </tr>
 </table>
 
-### LLM Modes
+### Brain Modes
 
-| Mode | Command | Requirements |
-|------|---------|-------------|
-| **Mock** | `MOCK_LLM=true npm start` | Nothing — deterministic demo responses |
-| **Local** | `LLM_MODE=local npm start` | QVAC Fabric LLM with Oikos fine-tuned model |
-| **Cloud** | `LLM_MODE=cloud npm start` | `LLM_API_KEY` + `LLM_BASE_URL` |
+| Mode | Config | Requirements |
+|------|--------|-------------|
+| **Mock** | `BRAIN_TYPE=mock` | Nothing — deterministic demo responses |
+| **Local** | `BRAIN_TYPE=ollama` | Ollama running with `oikos-agent` model (Qwen 3 4B fine-tuned) |
+| **Remote** | `BRAIN_TYPE=http` | Any OpenAI-compatible endpoint (`LLM_BASE_URL` + `LLM_API_KEY`) |
 
 ---
 

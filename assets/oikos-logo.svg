@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<!-- Created with Inkscape (http://www.inkscape.org/) -->
-
 <svg
    width="165.48256mm"
    height="54.091259mm"
@@ -9,32 +7,45 @@
    id="svg1"
    xml:space="preserve"
    xmlns="http://www.w3.org/2000/svg"
-   xmlns:svg="http://www.w3.org/2000/svg"><defs
-     id="defs1" /><g
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <style>
+    .logo-fill { fill: #000000; }
+    @media (prefers-color-scheme: dark) {
+      .logo-fill { fill: #ebb743; }
+    }
+  </style>
+  <g
      id="layer1"
      transform="translate(-19.482719,-175.4493)"><circle
-       style="fill:#000000;fill-opacity:1;stroke-width:0.146419;stroke-linejoin:round;stroke-miterlimit:0"
+       class="logo-fill"
+       style="fill-opacity:1;stroke-width:0.146419;stroke-linejoin:round;stroke-miterlimit:0"
        id="path1"
        cx="51.843533"
        cy="203.35382"
        r="17.687586" /><circle
-       style="fill:#000000;fill-opacity:1;stroke-width:0.146801;stroke-linejoin:round;stroke-miterlimit:0"
+       class="logo-fill"
+       style="fill-opacity:1;stroke-width:0.146801;stroke-linejoin:round;stroke-miterlimit:0"
        id="path1-4"
        cx="120.92068"
        cy="203.36241"
        r="17.733706" /><path
-       style="fill:#000000;fill-opacity:1;stroke-width:0.14871;stroke-linejoin:round;stroke-miterlimit:0"
+       class="logo-fill"
+       style="fill-opacity:1;stroke-width:0.14871;stroke-linejoin:round;stroke-miterlimit:0"
        d="m 84.047666,185.65206 h 24.409814 l -15.713526,18.13847 17.129966,17.24293 H 84.153249 Z"
        id="path2" /><rect
-       style="fill:#000000;fill-opacity:1;stroke-width:0.212814;stroke-linejoin:round;stroke-miterlimit:0"
+       class="logo-fill"
+       style="fill-opacity:1;stroke-width:0.212814;stroke-linejoin:round;stroke-miterlimit:0"
        id="rect2"
        width="8.4932919"
        height="35.399162"
        x="72.367882"
        y="185.64366" /><path
-       style="display:inline;fill:#000000;fill-opacity:1;stroke-width:0.146204;stroke-linejoin:round;stroke-miterlimit:0"
+       class="logo-fill"
+       style="display:inline;fill-opacity:1;stroke-width:0.146204;stroke-linejoin:round;stroke-miterlimit:0"
        d="m 141.36924,185.61145 v 29.03005 l 25.43894,-29.05908 z"
        id="path3" /><path
-       style="display:inline;fill:#000000;fill-opacity:1;stroke-width:0.146204;stroke-linejoin:round;stroke-miterlimit:0"
+       class="logo-fill"
+       style="display:inline;fill-opacity:1;stroke-width:0.146204;stroke-linejoin:round;stroke-miterlimit:0"
        d="m 166.74075,220.99018 v -28.94175 l -25.43894,28.97078 z"
-       id="path3-8" /></g></svg>
+       id="path3-8" /></g>
+</svg>
