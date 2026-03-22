@@ -75,6 +75,8 @@ MCP Server · CLI · Direct IPC · Hyperswarm · x402
 
 ### Brain Modes
 
+When an external agent (OpenClaw, Claude, etc.) connects via MCP or CLI, it brings its own LLM — no brain config needed. These modes control oikos-wallet's **built-in brain** for standalone and companion use:
+
 | Mode | Config | Requirements |
 |------|--------|-------------|
 | **Mock** | `BRAIN_TYPE=mock` | Nothing — deterministic demo responses |
