@@ -110,8 +110,8 @@ function loadOrCreateKeypair (filepath) {
 
 // ── 2. Configuration ──
 
-const home = os.homedir()
-const keypairPath = path.join(home, '.oikos', 'companion-keypair.json')
+const oikosHome = env.OIKOS_HOME || path.join(os.homedir(), '.oikos')
+const keypairPath = path.join(oikosHome, 'companion-keypair.json')
 const keypair = loadOrCreateKeypair(keypairPath)
 const companionPubkey = b4a.toString(keypair.publicKey, 'hex')
 
@@ -119,7 +119,7 @@ const companionPubkey = b4a.toString(keypair.publicKey, 'hex')
 let agentPubkey = env.OIKOS_AGENT_PUBKEY || null
 if (!agentPubkey) {
   try {
-    const autoPath = path.join(home, '.oikos', 'agent-pubkey.txt')
+    const autoPath = path.join(oikosHome, 'agent-pubkey.txt')
     if (fs.existsSync(autoPath)) {
       agentPubkey = fs.readFileSync(autoPath, 'utf-8').trim()
       console.log('[companion] Auto-detected agent pubkey from ~/.oikos/')
@@ -490,7 +490,7 @@ const server = http.createServer(async (req, res) => {
         return json(res, { error: 'Invalid pubkey. Must be 64 hex chars.' }, 400)
       }
       // Write to persistent file
-      const agentPubkeyPath = path.join(home, '.oikos', 'agent-pubkey.txt')
+      const agentPubkeyPath = path.join(oikosHome, 'agent-pubkey.txt')
       const dir = path.dirname(agentPubkeyPath)
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
       fs.writeFileSync(agentPubkeyPath, pk)
@@ -506,7 +506,7 @@ const server = http.createServer(async (req, res) => {
 
   if (url === '/api/companion/unpair' && req.method === 'POST') {
     try {
-      const agentPubkeyPath = path.join(home, '.oikos', 'agent-pubkey.txt')
+      const agentPubkeyPath = path.join(oikosHome, 'agent-pubkey.txt')
       if (fs.existsSync(agentPubkeyPath)) fs.unlinkSync(agentPubkeyPath)
       agentPubkey = null
       if (swarm) { swarm.destroy(); swarm = null }
