@@ -17,6 +17,12 @@
   <a href="https://github.com/nicolo-ribaudo/tc39-proposal-wdk"><img src="https://img.shields.io/badge/WDK-Tether-50af95" alt="WDK"></a>
   <a href="https://github.com/tetherto/qvac-fabric-llm.cpp"><img src="https://img.shields.io/badge/QVAC_Fabric-Tether-50af95" alt="QVAC"></a>
 </p>
+<p align="center">
+  <img src="https://img.shields.io/badge/Ethereum-Sepolia-3C3C3D?logo=ethereum" alt="Ethereum">
+  <img src="https://img.shields.io/badge/Bitcoin-Testnet-F7931A?logo=bitcoin" alt="Bitcoin">
+  <img src="https://img.shields.io/badge/Spark-Lightning-792EE5" alt="Spark">
+  <img src="https://img.shields.io/badge/ERC--8004-On--Chain_Identity-blue" alt="ERC-8004">
+</p>
 
 <p align="center">
 Process-isolated, multi-chain wallet infrastructure for autonomous AI agents.<br>
@@ -33,11 +39,45 @@ Agents hold <strong>USDt</strong>, <strong>XAUt</strong>, and <strong>USAt</stro
 
 ---
 
+## Quick Demo
+
+```bash
+git clone https://github.com/AdrianSousa/sovclaw.git && cd sovclaw
+npm install    # installs deps + auto-builds TypeScript
+npm run demo   # opens dashboard at localhost:3420
+```
+
+Zero API keys. Zero blockchain. Mock wallet with simulated agents, live policy engine, and full audit trail.
+Requires **Node.js >= 22**.
+
+---
+
 ## Why Oikos
 
 Every agent wallet today is a wrapper around an API key. Oikos is different: the wallet runs in a **separate process** from the agent. The agent reasons. The wallet signs. They communicate over IPC. Even if the agent process is compromised, the wallet's policy engine still gates every transaction.
 
-This isn't a chatbot with a wallet plugin — it's **wallet infrastructure**. Agent-agnostic, framework-agnostic, with six integration surfaces. And for humans, a sovereign P2P desktop app to monitor, instruct, and override their agents — no servers, no cloud, just a direct encrypted channel.
+This is **wallet infrastructure**. Agent-agnostic, framework-agnostic, with six integration surfaces. And for humans, a sovereign P2P desktop app to monitor, instruct, and override their agents. No servers, no cloud, just a direct encrypted channel.
+
+---
+
+## Live Demo: Agent-to-Agent Commerce
+
+Two agents. One swarm. No intermediaries.
+
+```
+Agent A (Ludwig)                    Agent B (Baruch)
+────────────────                    ────────────────
+swarm_announce →
+  SELL: Strategy file               ← swarm discovers listing
+  50–200 USDT
+                                    → swarm_bid (80 USDT)
+swarm_accept_bid ←
+swarm_deliver_result →              ← strategy file received (E2E encrypted)
+  payment settles on-chain automatically
+ERC-8004 reputation ←──────────────→ both agents' on-chain scores updated
+```
+
+Both agents hold real testnet balances. Discovery, negotiation, delivery, and settlement happen peer-to-peer over Hyperswarm — no servers, no intermediaries.
 
 ---
 
@@ -85,7 +125,7 @@ When an external agent (OpenClaw, Claude, etc.) connects via MCP or CLI, it brin
 | Mode | Config | Requirements |
 |------|--------|-------------|
 | **Mock** | `BRAIN_TYPE=mock` | Nothing — deterministic demo responses |
-| **Local** | `BRAIN_TYPE=ollama` | Ollama running with `oikos-agent` model (Qwen 3 4B fine-tuned) |
+| **Local** | `BRAIN_TYPE=ollama` | Ollama/QVAC running with any model. We used `oikos-agent` model (Qwen 3 4B fine-tuned) |
 | **Remote** | `BRAIN_TYPE=http` | Any OpenAI-compatible endpoint (`LLM_BASE_URL` + `LLM_API_KEY`) |
 
 ---
@@ -97,25 +137,25 @@ When an external agent (OpenClaw, Claude, etc.) connects via MCP or CLI, it brin
   ┌─────────────────────────────────────────────────────────────┐
   │                                                             │
   │  ┌─────────────────────┐    IPC     ┌────────────────────┐  │
-  │  │    OIKOS-WALLET      │ stdin/out │   WALLET ISOLATE    │  │
-  │  │    (Node.js)         │◄────────►│   (Bare Runtime)    │  │
-  │  │                      │ JSON-lines│                     │  │
-  │  │  ┌───────────────┐   │           │  ┌──────────────┐   │  │
-  │  │  │ Hyperswarm    │   │           │  │ WDK Core     │   │  │
-  │  │  │ Agent Swarm   │   │           │  │ Keys + Signer│   │  │
-  │  │  └───────────────┘   │           │  └──────────────┘   │  │
-  │  │  ┌───────────────┐   │           │  ┌──────────────┐   │  │
-  │  │  │ MCP Server    │   │           │  │ PolicyEngine │   │  │
-  │  │  │ Dashboard     │   │           │  │ 8 Rule Types │   │  │
-  │  │  └───────────────┘   │           │  └──────────────┘   │  │
-  │  │  ┌───────────────┐   │           │  ┌──────────────┐   │  │
-  │  │  │ CLI + x402    │   │           │  │ Audit Log    │   │  │
-  │  │  │ + RGB         │   │           │  │ Append-Only  │   │  │
-  │  │  └───────────────┘   │           │  └──────────────┘   │  │
-  │  └─────────────────────┘           └────────────────────┘  │
+  │  │    OIKOS-WALLET     │ stdin/out  │   WALLET ISOLATE   │  │
+  │  │    (Node.js)        │ ◄────────► │   (Bare Runtime)   │  │
+  │  │                     │ JSON-lines │                    │  │
+  │  │  ┌───────────────┐  │            │  ┌──────────────┐  │  │
+  │  │  │ Hyperswarm    │  │            │  │ WDK Core     │  │  │
+  │  │  │ Agent Swarm   │  │            │  │ Keys + Signer│  │  │
+  │  │  └───────────────┘  │            │  └──────────────┘  │  │
+  │  │  ┌───────────────┐  │            │  ┌──────────────┐  │  │
+  │  │  │ MCP Server    │  │            │  │ PolicyEngine │  │  │
+  │  │  │ Dashboard     │  │            │  │ 8 Rule Types |  │  │
+  │  │  └───────────────┘  │            │  └──────────────┘  │  │
+  │  │  ┌───────────────┐  │            │  ┌──────────────┐  │  │
+  │  │  │ CLI + x402    │  │            │  │ Audit Log    │  │  │
+  │  │  │ + RGB         │  │            │  │ Append-Only  │  │  │
+  │  │  └───────────────┘  │            │  └──────────────┘  │  │
+  │  └─────────────────────┘            └────────────────────┘  │
   │                                                             │
   │  ┌───────────────────────────────────────────────────────┐  │
-  │  │                  INTEGRATION LAYER                     │  │
+  │  │                  INTEGRATION LAYER                    │  │
   │  │  OpenClaw │ MCP │ CLI │ IPC │ Hyperswarm │ x402       │  │
   │  └───────────────────────────────────────────────────────┘  │
   └─────────────────────────────────────────────────────────────┘
@@ -157,7 +197,7 @@ A sovereign desktop application built on Pear Runtime. No servers, no cloud — 
 
 - **Multi-chain** — Bitcoin testnet + Sepolia (EVM) + any WDK-supported chain
 - **Multi-asset** — USDt, XAUt, USAt, BTC, ETH (all three mandatory Tether assets)
-- **DeFi operations** — Swaps, bridges, yield — all policy-enforced ¹
+- **DeFi operations** — Swaps, bridges, yield — all policy-enforced
 - **PolicyEngine** — 8 rule types: per-tx limits, session caps, daily budgets, cooldowns, confidence thresholds, whitelists, time windows
 - **Agent Swarm** — Hyperswarm DHT discovery, two-layer topic model (public board + private rooms), audit-derived reputation
 - **x402 Machine Payments** — HTTP 402 protocol for commodity services with EIP-3009 signing
@@ -167,7 +207,28 @@ A sovereign desktop application built on Pear Runtime. No servers, no cloud — 
 - **Sovereign AI** — Qwen 3 4B, Q8-quantized, LoRA fine-tuned on custom Oikos dataset via [Unsloth](https://unsloth.ai), running on [QVAC Fabric LLM](https://github.com/tetherto/qvac-fabric-llm.cpp) — zero cloud dependencies
 - **140 tests passing** — TypeScript strict mode, zero `any` types
 
-> **¹ Testnet note:** DeFi operations (swaps, bridges, yield) use mock implementations in testnet/demo mode. Mainnet operations require funded wallets and live protocol endpoints.
+> **Testnet note:** All operations currently run on Sepolia (EVM) and Bitcoin testnet. The architecture is mainnet-ready — switching to production requires funded wallets and live RPC endpoints, no code changes. DeFi operations (swaps, bridges, yield) use mock implementations in testnet/demo mode.
+
+---
+
+## On-Chain Agent Identity (ERC-8004)
+
+Oikos implements the [ERC-8004 Trustless Agents](https://eips.ethereum.org/EIPS/eip-8004) standard — the first live agent identity protocol on Ethereum.
+
+When an agent receives its first ETH, it automatically:
+1. Mints an ERC-721 NFT on the IdentityRegistry contract (Sepolia)
+2. Links its wallet address via EIP-712 signed `setAgentWallet`
+3. Begins accumulating on-chain reputation via tagged feedback after every swarm settlement
+
+```
+Agent starts → funded → NFT minted → agentId assigned → reputation grows
+```
+
+**Why it matters:** Any agent can verify a counterparty's track record before trading. No trust assumptions, no intermediaries — just on-chain history.
+
+Contracts live on Sepolia:
+- IdentityRegistry: `0x8004A818BFB912233c491871b3d84c89A494BD9e`
+- ReputationRegistry: `0x8004B663056A597Dffe9eCcC1965A193B7388713`
 
 ---
 
@@ -175,7 +236,7 @@ A sovereign desktop application built on Pear Runtime. No servers, no cloud — 
 
 | Surface | Protocol | Use Case |
 |---------|----------|----------|
-| **OpenClaw Skill** | `SKILL.md` | Any OpenClaw agent gets wallet capabilities |
+| **OpenClaw Skill** | `SKILL.md` | Agent reads one URL, installs wallet, pairs Oikos App via Hyperswarm, and operates full DeFi + swarm from any chat interface. Zero config. |
 | **MCP Server** | 21 tools via JSON-RPC 2.0 | Any MCP-compatible agent framework |
 | **CLI** | `oikos` commands | Shell agents, human operators, scripting |
 | **Direct IPC** | stdin/stdout JSON-lines | Embedded use in custom agent processes |
@@ -239,9 +300,10 @@ npm test
 
 ---
 
-## Roadmap
+## Future Endeavors
 
-- **Mobile Oikos App** — Pear Runtime cross-platform (iOS + Android). Same Hyperswarm P2P channel, native mobile UI via Bare Kit.
+- **Mobile Oikos App** — Pear Runtime cross-platform (iOS + Android), native mobile UI via Bare Kit.
+- **Mainnet launch** — Ethereum + Bitcoin mainnet, live USDT/XAUT/USAT.
 - **QVAC + BitNet b1.58** — Natively ternary (1.58-bit) model, LoRA fine-tuned on QVAC Fabric. On-device inference with near-zero power draw.
 - **MPP (Machine Payments Protocol)** — [Tempo/Stripe's](https://stripe.com/blog/machine-payments-protocol) open standard for agent payments via HTTP 402 + Shared Payment Tokens. Complementary to x402 — supporting stablecoin and fiat settlement.
 - **RGB Protocol** — Full client-validated smart contract implementation with Hyperswarm-based consignment transfer for off-chain RGB state exchange.
