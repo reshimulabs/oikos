@@ -41,13 +41,7 @@
       .logo-fill { fill: #ebb743; }
     }
   </style>
-  <rect
-   style="fill:#e3b959;stroke-width:1.6;stroke-linejoin:round;stroke-miterlimit:0;fill-opacity:1"
-   id="rect1"
-   width="831.57648"
-   height="648.065"
-   x="0"
-   y="0" /><g
+<g
    id="layer1"
    transform="matrix(1.8126283,0,0,1.8126283,229.95335,-49.066631)"><circle
      class="logo-fill"
