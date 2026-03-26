@@ -254,10 +254,14 @@ async function main() {
     let rgbBridge = null;
     if (config.rgbEnabled) {
         const { startTransportBridge } = await import('./rgb/transport-bridge.js');
+        const { loadOrCreateKeypair } = await import('./swarm/identity.js');
+        const rgbKeypair = loadOrCreateKeypair(config.keypairPath);
         rgbBridge = startTransportBridge(config.rgbTransportPort, {
             mock: config.mockWallet,
+            keypair: rgbKeypair,
+            storageDir: join(process.cwd(), '.oikos-rgb-transport'),
         });
-        console.error(`[oikos] RGB transport bridge: http://127.0.0.1:${config.rgbTransportPort}`);
+        console.error(`[oikos] RGB transport bridge: http://127.0.0.1:${config.rgbTransportPort} (${config.mockWallet ? 'mock' : 'live'})`);
     }
     // 9. Initialize brain adapter (chat bridge)
     const brain = createBrainAdapter({
@@ -528,7 +532,7 @@ async function main() {
         if (swarm)
             await swarm.stop();
         if (rgbBridge)
-            rgbBridge.stop();
+            await rgbBridge.stop();
         wallet.stop();
         process.exit(0);
     };

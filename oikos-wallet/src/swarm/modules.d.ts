@@ -62,6 +62,42 @@ declare module 'sodium-universal' {
   export default sodium;
 }
 
+declare module 'rgb-consignment-transport' {
+  interface SessionOpts {
+    invoice: string | Buffer;
+    senderPubkey: Buffer;
+    nonce: Buffer;
+    role: 'sender' | 'receiver';
+    storage: string;
+    keyPair?: { publicKey: Buffer; secretKey: Buffer };
+    receiverPubkey?: Buffer;
+    timeout?: number;
+    ackTimeout?: number;
+    dht?: unknown;
+  }
+
+  interface Session {
+    open(): Promise<void>;
+    sendConsignment(data: Buffer): Promise<{ isAck: boolean; errorCode: number; payloadString?: string }>;
+    receiveConsignment(): Promise<{ header: Record<string, unknown>; payload: Buffer }>;
+    sendAck(): Promise<void>;
+    sendNack(errorCode: number, message: string): Promise<void>;
+    destroy(): Promise<void>;
+  }
+
+  function createSession(opts: SessionOpts): Session;
+  function deriveTopic(invoice: string | Buffer, senderPubkey: Buffer, nonce: Buffer): Buffer;
+  function generateNonce(): Buffer;
+
+  const _default: {
+    createSession: typeof createSession;
+    Session: new (opts: SessionOpts) => Session;
+    deriveTopic: typeof deriveTopic;
+    generateNonce: typeof generateNonce;
+  };
+  export default _default;
+}
+
 declare module 'hyperdht' {
   class HyperDHT {
     static keyPair(): { publicKey: Buffer; secretKey: Buffer };

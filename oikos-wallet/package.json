@@ -26,6 +26,7 @@
     "express": "4.21.2",
     "hyperswarm": "4.16.0",
     "protomux": "3.10.0",
+    "rgb-consignment-transport": "file:../../rgb-c-t",
     "sodium-universal": "5.0.1"
   },
   "devDependencies": {

@@ -272,14 +272,18 @@ async function main(): Promise<void> {
   // 7. Identity will be replaced by RGB-A AgentCard in Step 4
 
   // 8. Start RGB transport bridge (if enabled)
-  let rgbBridge: { stop: () => void } | null = null;
+  let rgbBridge: { stop: () => Promise<void> } | null = null;
 
   if (config.rgbEnabled) {
     const { startTransportBridge } = await import('./rgb/transport-bridge.js');
+    const { loadOrCreateKeypair } = await import('./swarm/identity.js');
+    const rgbKeypair = loadOrCreateKeypair(config.keypairPath);
     rgbBridge = startTransportBridge(config.rgbTransportPort, {
       mock: config.mockWallet,
+      keypair: rgbKeypair,
+      storageDir: join(process.cwd(), '.oikos-rgb-transport'),
     });
-    console.error(`[oikos] RGB transport bridge: http://127.0.0.1:${config.rgbTransportPort}`);
+    console.error(`[oikos] RGB transport bridge: http://127.0.0.1:${config.rgbTransportPort} (${config.mockWallet ? 'mock' : 'live'})`);
   }
 
   // 9. Initialize brain adapter (chat bridge)
@@ -566,7 +570,7 @@ async function main(): Promise<void> {
     console.error('[oikos] Shutting down...');
     if (companion) await companion.stop();
     if (swarm) await swarm.stop();
-    if (rgbBridge) rgbBridge.stop();
+    if (rgbBridge) await rgbBridge.stop();
     wallet.stop();
     process.exit(0);
   };

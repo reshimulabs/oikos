@@ -14,72 +14,360 @@
  * - Wallet Isolate: has keys, no networking (calls HTTP to localhost)
  * - Brain: has networking (Hyperswarm), no keys
  *
- * Pattern reused from rgb-wallet-pear/sidecar/proxy.js.
+ * Pattern reused from rgb-wallet-pear/sidecar/rgb-manager.js.
  *
  * @security This module runs in the Brain process. It NEVER touches
  * seed phrases or private keys. It only relays consignment data.
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
+import { randomBytes } from 'crypto';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { mkdirSync, rmSync } from 'fs';
 
-/** Stored consignments waiting to be picked up (recipientId → data) */
-const pendingConsignments: Map<string, Buffer> = new Map();
+// rgb-consignment-transport (CJS, types in swarm/modules.d.ts)
+import rgbTransport from 'rgb-consignment-transport';
+const { createSession, deriveTopic, generateNonce } = rgbTransport as {
+  createSession: (opts: SessionOpts) => RgbSession;
+  deriveTopic: (invoice: string | Buffer, senderPubkey: Buffer, nonce: Buffer) => Buffer;
+  generateNonce: () => Buffer;
+};
 
-/** Stored ACKs waiting to be picked up (recipientId → boolean) */
-const pendingAcks: Map<string, boolean> = new Map();
+import b4a from 'b4a';
+
+// ── Types ──
+
+interface SessionOpts {
+  invoice: string | Buffer;
+  senderPubkey: Buffer;
+  nonce: Buffer;
+  role: 'sender' | 'receiver';
+  storage: string;
+  keyPair?: { publicKey: Buffer; secretKey: Buffer };
+  receiverPubkey?: Buffer;
+  timeout?: number;
+  ackTimeout?: number;
+  dht?: unknown;
+}
+
+interface RgbSession {
+  open(): Promise<void>;
+  sendConsignment(data: Buffer): Promise<{ isAck: boolean; errorCode: number; payloadString?: string }>;
+  receiveConsignment(): Promise<{ header: Record<string, unknown>; payload: Buffer }>;
+  sendAck(): Promise<void>;
+  sendNack(errorCode: number, message: string): Promise<void>;
+  destroy(): Promise<void>;
+}
+
+export interface TransportBridgeOptions {
+  mock?: boolean;
+  keypair?: { publicKey: Buffer; secretKey: Buffer };
+  storageDir?: string;
+  /** HyperDHT testnet (for integration tests). Calls testnet.createNode() per session. */
+  testnet?: { createNode(): unknown };
+}
+
+export interface TransportBridgeHandle {
+  server: Server;
+  stop: () => Promise<void>;
+}
+
+interface SendParams {
+  invoice: string;
+  receiverPubkey: string;
+  nonce: string;
+}
+
+interface ActiveSession {
+  session: RgbSession;
+  role: 'sender' | 'receiver';
+  recipientId: string;
+  storagePath: string;
+  createdAt: number;
+  timeoutTimer?: ReturnType<typeof setTimeout>;
+  ackResolver?: (ack: boolean) => void;
+}
+
+// Session safety timeout (5 minutes)
+const SESSION_TIMEOUT_MS = 5 * 60 * 1000;
+
+// ── Pure helpers ──
+
+function makeSessionStorage(baseDir: string): string {
+  const dir = join(baseDir, 'session-' + randomBytes(8).toString('hex'));
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function cleanupSessionStorage(storagePath: string): void {
+  try {
+    rmSync(storagePath, { recursive: true, force: true });
+  } catch {
+    // best effort
+  }
+}
+
+function readBody(req: IncomingMessage): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
+function jsonResponse(res: ServerResponse, status: number, data: unknown): void {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+// ── Main ──
 
 /**
  * Start the RGB transport bridge HTTP server.
  *
- * Implements the RGB transport protocol endpoints:
- * - POST /consignment/:recipientId — store a consignment for delivery
- * - GET  /consignment/:recipientId — retrieve a stored consignment
- * - POST /ack/:recipientId         — store an ACK/NACK for a consignment
- * - GET  /ack/:recipientId         — retrieve a stored ACK
- *
- * In mock mode, consignments are stored in-memory (no Hyperswarm).
- * In real mode, rgb-c-t delivers via Hyperswarm sessions.
+ * Each call creates an independent bridge instance with its own state.
+ * Multiple bridges can run in the same process (e.g., for integration tests).
  */
 export function startTransportBridge(
   port: number,
-  options?: { mock?: boolean },
-): { server: Server; stop: () => void } {
+  options?: TransportBridgeOptions,
+): TransportBridgeHandle {
   const mock = options?.mock ?? true;
+  const keypair = options?.keypair;
+  const storageDir = options?.storageDir ?? join(tmpdir(), 'oikos-rgb-transport');
+  const testnet = options?.testnet;
+
+  mkdirSync(storageDir, { recursive: true });
+
+  // Per-instance state (NOT module-level)
+  const pendingConsignments = new Map<string, Buffer>();
+  const pendingAcks = new Map<string, boolean>();
+  const pendingSends = new Map<string, SendParams>();
+  const activeSessions = new Map<string, ActiveSession>();
+  const recipientToTransfer = new Map<string, string>();
+
+  function destroySession(transferId: string): void {
+    const entry = activeSessions.get(transferId);
+    if (!entry) return;
+    if (entry.timeoutTimer) clearTimeout(entry.timeoutTimer);
+    recipientToTransfer.delete(entry.recipientId);
+    activeSessions.delete(transferId);
+    entry.session.destroy().catch(() => {});
+    cleanupSessionStorage(entry.storagePath);
+  }
+
+  function registerSession(
+    transferId: string,
+    session: RgbSession,
+    role: 'sender' | 'receiver',
+    recipientId: string,
+    storagePath: string,
+  ): void {
+    const timeoutTimer = setTimeout(() => {
+      console.error(`[rgb-bridge] Session ${transferId} timed out (${role}), destroying`);
+      destroySession(transferId);
+    }, SESSION_TIMEOUT_MS);
+
+    activeSessions.set(transferId, {
+      session,
+      role,
+      recipientId,
+      storagePath,
+      createdAt: Date.now(),
+      timeoutTimer,
+    });
+    recipientToTransfer.set(recipientId, transferId);
+  }
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? '/', `http://127.0.0.1:${port}`);
     const parts = url.pathname.split('/').filter(Boolean);
-    const type = parts[0]; // 'consignment' or 'ack'
-    const recipientId = parts[1];
+    const type = parts[0] ?? '';
+    const recipientId = parts[1] ?? '';
 
-    // CORS headers for local requests
-    res.setHeader('Content-Type', 'application/json');
     res.setHeader('Access-Control-Allow-Origin', '127.0.0.1');
 
-    if (!type || !recipientId) {
-      res.writeHead(400);
-      res.end(JSON.stringify({ error: 'Missing type or recipientId' }));
-      return;
-    }
-
     try {
+      // ── POST /send-prepare ──
+      if (type === 'send-prepare' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)).toString()) as {
+          recipientId: string;
+          invoice: string;
+          receiverPubkey: string;
+          nonce: string;
+        };
+        pendingSends.set(body.recipientId, {
+          invoice: body.invoice,
+          receiverPubkey: body.receiverPubkey,
+          nonce: body.nonce,
+        });
+        console.error(`[rgb-bridge] Registered send-prepare for ${body.recipientId}`);
+        jsonResponse(res, 200, { ok: true });
+        return;
+      }
+
+      // ── POST /listen ──
+      if (type === 'listen' && req.method === 'POST') {
+        const body = JSON.parse((await readBody(req)).toString()) as {
+          recipientId: string;
+          invoice: string;
+          senderPubkey: string;
+          nonce: string;
+        };
+
+        if (mock) {
+          console.error(`[rgb-bridge] Mock listen registered for ${body.recipientId}`);
+          jsonResponse(res, 200, { ok: true, transferId: 'mock', topic: '0'.repeat(64) });
+          return;
+        }
+
+        if (!keypair) {
+          jsonResponse(res, 500, { error: 'No keypair configured for live mode' });
+          return;
+        }
+
+        const transferId = randomBytes(8).toString('hex');
+        const sessionStorage = makeSessionStorage(storageDir);
+
+        const senderPubkey = b4a.from(body.senderPubkey, 'hex');
+        const nonce = b4a.from(body.nonce, 'hex');
+        const topic = deriveTopic(body.invoice, senderPubkey, nonce);
+
+        const sessionOpts: SessionOpts = {
+          invoice: body.invoice,
+          senderPubkey,
+          nonce,
+          role: 'receiver',
+          storage: sessionStorage,
+          keyPair: keypair,
+          timeout: 120000,
+          ackTimeout: 300000,
+        };
+        if (testnet) sessionOpts.dht = testnet.createNode();
+
+        const session = createSession(sessionOpts);
+        registerSession(transferId, session, 'receiver', body.recipientId, sessionStorage);
+
+        // Promise that resolves when POST /ack triggers the decision
+        const ackPromise = new Promise<boolean>((resolve) => {
+          const entry = activeSessions.get(transferId);
+          if (entry) entry.ackResolver = resolve;
+        });
+
+        // Background: open → receive → wait for ACK decision → send ACK/NACK → destroy
+        session.open()
+          .then(() => session.receiveConsignment())
+          .then(async ({ payload }) => {
+            pendingConsignments.set(body.recipientId, payload);
+            console.error(`[rgb-bridge] Received consignment for ${body.recipientId} (${payload.length} bytes) via P2P`);
+
+            const ack = await ackPromise;
+            if (ack) {
+              await session.sendAck();
+              console.error(`[rgb-bridge] Sent ACK for ${body.recipientId} via P2P`);
+            } else {
+              await session.sendNack(0x0010, 'RGB validation failed');
+              console.error(`[rgb-bridge] Sent NACK for ${body.recipientId} via P2P`);
+            }
+          })
+          .catch((err: Error) => {
+            console.error(`[rgb-bridge] Receive error for ${body.recipientId}: ${err.message}`);
+          })
+          .finally(() => {
+            destroySession(transferId);
+          });
+
+        console.error(`[rgb-bridge] Listening for ${body.recipientId} on topic ${b4a.toString(topic, 'hex').slice(0, 16)}...`);
+        jsonResponse(res, 200, {
+          ok: true,
+          transferId,
+          topic: b4a.toString(topic, 'hex'),
+        });
+        return;
+      }
+
+      // ── POST /cancel/:recipientId ──
+      if (type === 'cancel' && recipientId && req.method === 'POST') {
+        const transferId = recipientToTransfer.get(recipientId);
+        if (transferId) {
+          destroySession(transferId);
+          console.error(`[rgb-bridge] Cancelled listener for ${recipientId}`);
+        }
+        jsonResponse(res, 200, { ok: true });
+        return;
+      }
+
+      // ── Require recipientId for remaining endpoints ──
+      if (!type || (!recipientId && type !== 'health')) {
+        jsonResponse(res, 400, { error: 'Missing type or recipientId' });
+        return;
+      }
+
       if (type === 'consignment') {
         if (req.method === 'POST') {
           const body = await readBody(req);
 
-          if (mock) {
-            // Mock mode: store in memory
+          if (mock || !keypair) {
             pendingConsignments.set(recipientId, body);
             console.error(`[rgb-bridge] Stored consignment for ${recipientId} (${body.length} bytes)`);
-          } else {
-            // Real mode: deliver via rgb-c-t Hyperswarm session
-            // TODO: Wire rgb-consignment-transport session
-            pendingConsignments.set(recipientId, body);
-            console.error(`[rgb-bridge] Queued consignment for ${recipientId} (${body.length} bytes)`);
+            jsonResponse(res, 200, { ok: true });
+            return;
           }
 
-          res.writeHead(200);
-          res.end(JSON.stringify({ ok: true }));
+          // Live mode: check for pre-registered send params
+          const sendParams = pendingSends.get(recipientId);
+          if (!sendParams) {
+            pendingConsignments.set(recipientId, body);
+            console.error(`[rgb-bridge] No send-prepare for ${recipientId}, stored locally (${body.length} bytes)`);
+            jsonResponse(res, 200, { ok: true });
+            return;
+          }
+
+          pendingSends.delete(recipientId);
+          const transferId = randomBytes(8).toString('hex');
+          const sessionStorage = makeSessionStorage(storageDir);
+
+          const nonce = b4a.from(sendParams.nonce, 'hex');
+          const receiverPubkey = b4a.from(sendParams.receiverPubkey, 'hex');
+
+          const sessionOpts: SessionOpts = {
+            invoice: sendParams.invoice,
+            senderPubkey: keypair.publicKey,
+            nonce,
+            role: 'sender',
+            storage: sessionStorage,
+            keyPair: keypair,
+            receiverPubkey,
+            timeout: 120000,
+            ackTimeout: 300000,
+          };
+          if (testnet) sessionOpts.dht = testnet.createNode();
+
+          const session = createSession(sessionOpts);
+          registerSession(transferId, session, 'sender', recipientId, sessionStorage);
+
+          try {
+            await session.open();
+            console.error(`[rgb-bridge] Sending consignment for ${recipientId} (${body.length} bytes) via P2P`);
+            const result = await session.sendConsignment(body);
+            pendingAcks.set(recipientId, result.isAck);
+
+            console.error(`[rgb-bridge] Send result for ${recipientId}: ${result.isAck ? 'ACK' : 'NACK'}`);
+            jsonResponse(res, 200, {
+              ok: true,
+              isAck: result.isAck,
+              errorCode: result.errorCode,
+              message: result.payloadString,
+            });
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Send failed';
+            console.error(`[rgb-bridge] Send error for ${recipientId}: ${msg}`);
+            jsonResponse(res, 500, { error: msg });
+          } finally {
+            destroySession(transferId);
+          }
         } else if (req.method === 'GET') {
           const data = pendingConsignments.get(recipientId);
           if (data) {
@@ -87,52 +375,54 @@ export function startTransportBridge(
             res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
             res.end(data);
           } else {
-            res.writeHead(404);
-            res.end(JSON.stringify({ error: 'No consignment for this recipient' }));
+            jsonResponse(res, 404, { error: 'No consignment for this recipient' });
           }
         } else {
-          res.writeHead(405);
-          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          jsonResponse(res, 405, { error: 'Method not allowed' });
         }
       } else if (type === 'ack') {
         if (req.method === 'POST') {
           const body = await readBody(req);
           const { ack } = JSON.parse(body.toString()) as { ack: boolean };
+
+          // Trigger ackResolver on the active receiver session (if any)
+          const transferId = recipientToTransfer.get(recipientId);
+          const entry = transferId ? activeSessions.get(transferId) : undefined;
+
+          if (entry && entry.role === 'receiver' && entry.ackResolver) {
+            entry.ackResolver(ack);
+            console.error(`[rgb-bridge] ACK decision for ${recipientId}: ${ack}`);
+          }
+
           pendingAcks.set(recipientId, ack);
-          console.error(`[rgb-bridge] Stored ACK for ${recipientId}: ${String(ack)}`);
-          res.writeHead(200);
-          res.end(JSON.stringify({ ok: true }));
+          jsonResponse(res, 200, { ok: true });
         } else if (req.method === 'GET') {
           const ack = pendingAcks.get(recipientId);
           if (ack !== undefined) {
             pendingAcks.delete(recipientId);
-            res.writeHead(200);
-            res.end(JSON.stringify({ ack }));
+            jsonResponse(res, 200, { ack });
           } else {
-            res.writeHead(404);
-            res.end(JSON.stringify({ error: 'No ACK for this recipient' }));
+            jsonResponse(res, 404, { error: 'No ACK for this recipient' });
           }
         } else {
-          res.writeHead(405);
-          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          jsonResponse(res, 405, { error: 'Method not allowed' });
         }
       } else if (type === 'health') {
-        res.writeHead(200);
-        res.end(JSON.stringify({
+        jsonResponse(res, 200, {
           status: 'ok',
           mode: mock ? 'mock' : 'live',
           pendingConsignments: pendingConsignments.size,
           pendingAcks: pendingAcks.size,
-        }));
+          pendingSends: pendingSends.size,
+          activeSessions: activeSessions.size,
+        });
       } else {
-        res.writeHead(404);
-        res.end(JSON.stringify({ error: `Unknown endpoint: ${type}` }));
+        jsonResponse(res, 404, { error: `Unknown endpoint: ${type}` });
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Internal error';
       console.error(`[rgb-bridge] Error: ${msg}`);
-      res.writeHead(500);
-      res.end(JSON.stringify({ error: msg }));
+      jsonResponse(res, 500, { error: msg });
     }
   });
 
@@ -142,20 +432,23 @@ export function startTransportBridge(
 
   return {
     server,
-    stop: () => {
-      server.close();
+    stop: async () => {
+      const destroyPromises: Promise<void>[] = [];
+      for (const [, entry] of activeSessions) {
+        if (entry.timeoutTimer) clearTimeout(entry.timeoutTimer);
+        destroyPromises.push(entry.session.destroy().catch(() => {}));
+        cleanupSessionStorage(entry.storagePath);
+      }
+      await Promise.all(destroyPromises);
+      activeSessions.clear();
+      recipientToTransfer.clear();
       pendingConsignments.clear();
       pendingAcks.clear();
+      pendingSends.clear();
+      server.close();
     },
   };
 }
 
-/** Read the full request body as a Buffer */
-function readBody(req: IncomingMessage): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(chunk));
-    req.on('end', () => resolve(Buffer.concat(chunks)));
-    req.on('error', reject);
-  });
-}
+// Re-export utilities for use by brain logic
+export { generateNonce, deriveTopic };
