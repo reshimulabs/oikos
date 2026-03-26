@@ -134,6 +134,15 @@ async function main(): Promise<void> {
     await swarm.start();
     console.error(`[oikos] Swarm: ${config.mockSwarm ? 'mock' : 'live'} (${config.agentName})`);
 
+    // Wire swarm peer events to RGB-A manager (deferred — rgbA may not be initialized yet)
+    swarm.onEvent((event) => {
+      if (rgbA && event.kind === 'peer_connected') {
+        const ev = event as unknown as Record<string, unknown>;
+        const pubkey = ev['pubkey'] as string | undefined;
+        if (pubkey) rgbA.handlePeerConnected(pubkey);
+      }
+    });
+
     // Auto-export swarm pubkey for Pear app auto-discovery
     const swarmPubkey = swarm.getPublicKey();
     if (swarmPubkey) {
@@ -269,7 +278,44 @@ async function main(): Promise<void> {
     console.error(`[oikos] Companion: listening for owner`);
   }
 
-  // 7. Identity will be replaced by RGB-A AgentCard in Step 4
+  // 7. Start RGB-A manager (identity, reputation, tiers)
+  let rgbA: import('./rgb-a/manager.js').RgbAManager | null = null;
+
+  if (config.rgbAEnabled) {
+    const { RgbAManager } = await import('./rgb-a/manager.js');
+    rgbA = new RgbAManager();
+
+    // Try to load existing keypair from wallet-isolate
+    let keypair: { publicKey: Uint8Array; secretKey: Uint8Array } | undefined;
+    try {
+      const stored = await wallet.loadRgbAKeypair();
+      if (stored.publicKey && stored.publicKey.length > 0) {
+        keypair = {
+          publicKey: Buffer.from(stored.publicKey, 'hex'),
+          secretKey: Buffer.from(stored.secretKey, 'hex'),
+        };
+        console.error(`[oikos] RGB-A: loaded existing keypair (${stored.publicKey.slice(0, 12)}...)`);
+      }
+    } catch {
+      // First run or keypair not stored yet
+    }
+
+    const identity = await rgbA.start({
+      keypair,
+      storagePath: config.rgbAStorageDir,
+      esploraUrl: config.rgbAEsploraUrl,
+    });
+
+    // Store keypair if newly generated
+    if (!keypair) {
+      const pubHex = Buffer.from(identity.publicKey).toString('hex');
+      const secHex = Buffer.from(identity.secretKey).toString('hex');
+      await wallet.storeRgbAKeypair(pubHex, secHex);
+      console.error(`[oikos] RGB-A: new keypair stored (${pubHex.slice(0, 12)}...)`);
+    }
+
+    console.error(`[oikos] RGB-A: identity created, trust protocol active`);
+  }
 
   // 8. Start RGB transport bridge (if enabled)
   let rgbBridge: { stop: () => Promise<void> } | null = null;
@@ -320,6 +366,7 @@ async function main(): Promise<void> {
     sparkEnabled,
     auth,
     companion: companion ?? null,
+    rgbA,
   };
 
   // 11. Wire auth module to companion for protomux-based auth operations

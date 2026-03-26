@@ -30,6 +30,7 @@ import type {
   AuditQuery,
   SparkInvoiceRequest,
   SparkPayInvoiceRequest,
+  StoreRgbAKeypairPayload,
 } from './ipc/types.js';
 
 /** BigInt-safe JSON serializer — WDK Spark returns BigInt values that break JSON.stringify */
@@ -55,7 +56,7 @@ import { WalletManager, MockWalletManager } from './wallet/manager.js';
 import type { WalletOperations } from './wallet/types.js';
 import { TESTNET_CHAINS } from './wallet/chains.js';
 import { DEMO } from './policies/presets.js';
-import { readFileSync, appendFileSync } from './compat/fs.js';
+import { readFileSync, appendFileSync, writeFileSync, existsSync } from './compat/fs.js';
 import { proc } from './compat/process.js';
 import { resolveSeed } from './secret/manager.js';
 
@@ -306,6 +307,41 @@ async function handleRequest(
             type: 'spark_transfers',
             payload: { transfers },
           };
+          break;
+        }
+
+        // ── RGB-A Keypair Storage ──
+
+        case 'store_rgb_a_keypair': {
+          const kp = request.payload as StoreRgbAKeypairPayload;
+          const keypairFile = getEnv('RGB_A_KEYPAIR_PATH', 'rgb-a-keypair.json');
+          writeFileSync(keypairFile, JSON.stringify({ publicKey: kp.publicKey, secretKey: kp.secretKey }), 'utf-8');
+          response = {
+            id: request.id,
+            type: 'rgb_a_keypair',
+            payload: { publicKey: kp.publicKey, secretKey: kp.secretKey },
+          };
+          console.error(`[wallet-isolate] RGB-A keypair stored (${kp.publicKey.slice(0, 12)}...)`);
+          break;
+        }
+
+        case 'load_rgb_a_keypair': {
+          const keypairFile = getEnv('RGB_A_KEYPAIR_PATH', 'rgb-a-keypair.json');
+          if (!existsSync(keypairFile)) {
+            response = {
+              id: request.id,
+              type: 'rgb_a_keypair',
+              payload: { publicKey: '', secretKey: '' },
+            };
+          } else {
+            const raw = readFileSync(keypairFile, 'utf-8');
+            const parsed = JSON.parse(raw) as { publicKey: string; secretKey: string };
+            response = {
+              id: request.id,
+              type: 'rgb_a_keypair',
+              payload: { publicKey: parsed.publicKey, secretKey: parsed.secretKey },
+            };
+          }
           break;
         }
 

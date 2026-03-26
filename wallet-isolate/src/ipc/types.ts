@@ -27,6 +27,7 @@ export interface ProposalCommon {
   confidence: number;     // 0.0–1.0 (LLM confidence)
   strategy: string;       // Strategy name from agent
   timestamp: number;      // Epoch ms
+  counterpartyTier?: number; // RGB-A tier (0-4) of counterparty, set by oikos-wallet before IPC
 }
 
 /** Send tokens to a recipient address */
@@ -96,6 +97,15 @@ export interface SparkPayInvoiceRequest {
   maxFeeSats?: number;
 }
 
+/** RGB-A keypair storage payload (Brain → Wallet) */
+export interface StoreRgbAKeypairPayload {
+  publicKey: string;   // hex-encoded Ed25519 public key
+  secretKey: string;   // hex-encoded Ed25519 secret key
+}
+
+/** RGB-A keypair load payload (Brain → Wallet) — no fields needed */
+export interface LoadRgbAKeypairPayload {}
+
 export type IPCRequestType =
   | 'propose_payment'
   | 'propose_rgb_issue'
@@ -111,7 +121,9 @@ export type IPCRequestType =
   | 'spark_create_invoice'
   | 'spark_pay_invoice'
   | 'spark_deposit_address'
-  | 'spark_get_transfers';
+  | 'spark_get_transfers'
+  | 'store_rgb_a_keypair'
+  | 'load_rgb_a_keypair';
 
 /** Dry-run policy check result — evaluate without executing or recording */
 export interface PolicyCheckResult {
@@ -128,6 +140,7 @@ export interface IPCRequest {
     | RGBIssueProposal | RGBTransferProposal
     | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery
     | SparkInvoiceRequest | SparkPayInvoiceRequest
+    | StoreRgbAKeypairPayload | LoadRgbAKeypairPayload
     | Record<string, unknown>;
 }
 
@@ -167,6 +180,12 @@ export interface AuditEntryResponse {
   entries: AuditEntry[];
 }
 
+/** RGB-A keypair response (Wallet → Brain) */
+export interface RgbAKeypairResponse {
+  publicKey: string;  // hex
+  secretKey: string;  // hex
+}
+
 export type IPCResponseType =
   | 'execution_result'
   | 'balance'
@@ -181,6 +200,7 @@ export type IPCResponseType =
   | 'spark_pay_result'
   | 'spark_deposit'
   | 'spark_transfers'
+  | 'rgb_a_keypair'
   | 'error';
 
 export interface IPCResponse {
@@ -195,6 +215,7 @@ export interface IPCResponse {
     | AuditEntryResponse
     | RGBAssetInfo[]
     | PolicyCheckResult
+    | RgbAKeypairResponse
     | Record<string, unknown>  // Spark and extensible responses
     | { message: string };
 }
@@ -229,6 +250,7 @@ const VALID_REQUEST_TYPES: ReadonlySet<string> = new Set([
   'query_balance', 'query_balance_all', 'query_address', 'query_policy', 'query_audit',
   'query_rgb_assets', 'query_rgb_balance', 'query_policy_check',
   'spark_create_invoice', 'spark_pay_invoice', 'spark_deposit_address', 'spark_get_transfers',
+  'store_rgb_a_keypair', 'load_rgb_a_keypair',
 ]);
 
 export function isValidTokenSymbol(value: unknown): value is TokenSymbol {
@@ -285,6 +307,12 @@ export function validateIPCRequest(raw: unknown): IPCRequest | null {
     case 'query_policy':
     case 'query_audit':
       break; // Optional fields only
+    case 'store_rgb_a_keypair':
+      if (typeof payload['publicKey'] !== 'string' || !/^[0-9a-f]{64}$/i.test(payload['publicKey'] as string)) return null;
+      if (typeof payload['secretKey'] !== 'string' || !/^[0-9a-f]{128}$/i.test(payload['secretKey'] as string)) return null;
+      break;
+    case 'load_rgb_a_keypair':
+      break; // No payload validation needed
   }
 
   // Extract optional source field from envelope

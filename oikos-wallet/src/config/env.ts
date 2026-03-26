@@ -201,6 +201,17 @@ export interface OikosConfig {
   /** Port for the RGB transport bridge HTTP server */
   rgbTransportPort: number;
 
+  // ── RGB-A (Agent Trust Protocol) ──
+
+  /** Enable RGB-A identity, reputation, and tier-gating */
+  rgbAEnabled: boolean;
+
+  /** Storage directory for RGB-A reputation store (Hypercore) */
+  rgbAStorageDir: string;
+
+  /** Esplora API URL for bond verification */
+  rgbAEsploraUrl: string;
+
   // ── Remote MCP ──
 
   /** Bearer token for remote MCP auth. If empty, remote MCP is authless. */
@@ -287,6 +298,11 @@ export function loadOikosConfig(): OikosConfig {
     // RGB
     rgbEnabled: getEnv('RGB_ENABLED', 'false') === 'true',
     rgbTransportPort: parseInt(getEnv('RGB_TRANSPORT_PORT', '13100'), 10),
+
+    // RGB-A
+    rgbAEnabled: getEnv('RGB_A_ENABLED', 'false') === 'true',
+    rgbAStorageDir: getEnv('RGB_A_STORAGE_DIR', join(process.cwd(), '.oikos-rgb-a')),
+    rgbAEsploraUrl: getEnv('RGB_A_ESPLORA_URL', 'https://blockstream.info/testnet/api'),
 
     // Remote MCP
     mcpAuthToken: getEnv('MCP_AUTH_TOKEN', ''),

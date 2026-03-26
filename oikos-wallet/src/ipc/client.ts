@@ -218,6 +218,20 @@ export class WalletIPCClient {
     return response.payload as RGBAssetInfo[];
   }
 
+  // ── RGB-A Identity Keypair ──
+
+  /** Store RGB-A keypair in wallet-isolate secret manager. */
+  async storeRgbAKeypair(publicKey: string, secretKey: string): Promise<{ publicKey: string; secretKey: string }> {
+    const response = await this.send('store_rgb_a_keypair' as IPCRequest['type'], { publicKey, secretKey } as unknown as IPCRequest['payload']);
+    return response.payload as unknown as { publicKey: string; secretKey: string };
+  }
+
+  /** Load RGB-A keypair from wallet-isolate secret manager. Returns empty strings if not found. */
+  async loadRgbAKeypair(): Promise<{ publicKey: string; secretKey: string }> {
+    const response = await this.send('load_rgb_a_keypair' as IPCRequest['type'], {} as unknown as IPCRequest['payload']);
+    return response.payload as unknown as { publicKey: string; secretKey: string };
+  }
+
   // ── Spark / Lightning ──
 
   /** Query Spark wallet balance in satoshis. */

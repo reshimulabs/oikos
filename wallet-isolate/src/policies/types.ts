@@ -15,7 +15,8 @@ export type PolicyRuleType =
   | 'cooldown_seconds'
   | 'require_confidence'
   | 'whitelist_recipients'
-  | 'time_window';
+  | 'time_window'
+  | 'min_counterparty_tier';
 
 export interface MaxPerTxRule {
   type: 'max_per_tx';
@@ -63,6 +64,11 @@ export interface TimeWindowRule {
   timezone: string;
 }
 
+export interface MinCounterpartyTierRule {
+  type: 'min_counterparty_tier';
+  minTier: number;  // 0-4 (RGB-A tier)
+}
+
 export type PolicyRule =
   | MaxPerTxRule
   | MaxPerSessionRule
@@ -71,7 +77,8 @@ export type PolicyRule =
   | CooldownSecondsRule
   | RequireConfidenceRule
   | WhitelistRecipientsRule
-  | TimeWindowRule;
+  | TimeWindowRule
+  | MinCounterpartyTierRule;
 
 export interface PaymentPolicy {
   id: string;

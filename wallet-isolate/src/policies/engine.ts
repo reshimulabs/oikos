@@ -233,6 +233,20 @@ export class PolicyEngine {
         }
         return null;
       }
+
+      case 'min_counterparty_tier': {
+        // Only applies to proposals with a counterparty
+        const counterparty = getCounterparty(proposal);
+        if (!counterparty) return null;
+        const tier = proposal.counterpartyTier;
+        if (tier === undefined || tier === null) {
+          return `[${policyId}] min_counterparty_tier: counterparty tier not provided`;
+        }
+        if (tier < rule.minTier) {
+          return `[${policyId}] min_counterparty_tier: counterparty tier ${tier} below minimum ${rule.minTier}`;
+        }
+        return null;
+      }
     }
   }
 

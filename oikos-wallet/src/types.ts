@@ -59,4 +59,6 @@ export interface OikosServices {
   auth: import('./auth/passphrase.js').PassphraseAuth | null;
   /** Companion coordinator for Pear app ↔ agent bridging */
   companion: CompanionCoordinator | null;
+  /** RGB-A trust protocol manager (identity, reputation, tiers) */
+  rgbA: import('./rgb-a/manager.js').RgbAManager | null;
 }

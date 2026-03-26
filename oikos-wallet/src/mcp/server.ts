@@ -265,6 +265,28 @@ const TOOLS: MCPTool[] = [
     description: 'List all RGB assets and their balances.',
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
+  // ── RGB-A Trust Protocol ──
+  {
+    name: 'get_agent_card',
+    description: 'Get this agent\'s RGB-A identity card (pubkey, tier, reputation summary).',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_reputation',
+    description: 'Get this agent\'s reputation ledger state (total transactions, volume, success rate).',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_tier',
+    description: 'Get an agent\'s computed trust tier (0=Unknown, 1=Provisional, 2=Established, 3=Trusted, 4=Witness).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        publicKey: { type: 'string', description: 'Agent public key (hex). Omit for self.' },
+      },
+      required: [],
+    },
+  },
   // ── Dry-Run Policy Check ──
   {
     name: 'simulate_proposal',
@@ -564,6 +586,45 @@ const handlers: Record<string, ToolHandler> = {
   },
   async rgb_assets(_params, svc) {
     return { assets: await svc.wallet.queryRGBAssets() };
+  },
+  async get_agent_card(_params, svc) {
+    if (!svc.rgbA) return { error: 'RGB-A not enabled. Set RGB_A_ENABLED=true.' };
+    const card = svc.rgbA.getAgentCard();
+    if (!card) return { error: 'No agent card — identity not yet created.' };
+    const pubHex = svc.rgbA.getPublicKeyHex() ?? '';
+    return {
+      pubkey: pubHex,
+      created_at: card.created_at,
+      swarm_topics: card.swarm_topics,
+      commitment_cadence: card.commitment_cadence,
+      bond_amount: card.bond_amount,
+    };
+  },
+  async get_reputation(_params, svc) {
+    if (!svc.rgbA) return { error: 'RGB-A not enabled. Set RGB_A_ENABLED=true.' };
+    const ledger = await svc.rgbA.getLedgerState();
+    if (!ledger) return { total_transactions: 0, total_volume_msat: 0, success_count: 0, failure_count: 0, dispute_count: 0 };
+    return {
+      total_transactions: ledger.total_transactions,
+      total_volume_msat: ledger.total_volume_msat,
+      success_count: ledger.success_count,
+      failure_count: ledger.failure_count,
+      dispute_count: ledger.dispute_count,
+      oldest_receipt: ledger.oldest_receipt,
+      newest_receipt: ledger.newest_receipt,
+    };
+  },
+  async get_tier(_params, svc) {
+    if (!svc.rgbA) return { error: 'RGB-A not enabled. Set RGB_A_ENABLED=true.' };
+    const result = await svc.rgbA.computeTier();
+    const tierNames = ['Unknown', 'Provisional', 'Established', 'Trusted', 'Witness'];
+    return {
+      tier: result.tier,
+      tierName: tierNames[result.tier] ?? 'Unknown',
+      bondVerified: result.bondVerified,
+      disputeRate90d: result.disputeRate90d,
+      distinctCounterparties: result.distinctCounterparties,
+    };
   },
   async simulate_proposal(params, svc) {
     const symbol = params['symbol'] as TokenSymbol;
