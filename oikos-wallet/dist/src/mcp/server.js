@@ -24,7 +24,7 @@ import { toSmallestUnit } from '../amounts.js';
 const TOOLS = [
     {
         name: 'wallet_balance_all',
-        description: 'Get all wallet balances across all chains and assets (USDt, XAUt, USAt, BTC, ETH).',
+        description: 'Get all wallet balances across all chains and assets (USDT, BTC, RGB).',
         inputSchema: { type: 'object', properties: {}, required: [] },
     },
     {
@@ -33,8 +33,8 @@ const TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {
-                chain: { type: 'string', enum: ['ethereum', 'polygon', 'bitcoin', 'arbitrum'] },
-                symbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH'] },
+                chain: { type: 'string', enum: ['bitcoin', 'rgb', 'spark'] },
+                symbol: { type: 'string', enum: ['USDT', 'BTC', 'RGB'] },
             },
             required: ['chain', 'symbol'],
         },
@@ -45,7 +45,7 @@ const TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {
-                chain: { type: 'string', enum: ['ethereum', 'polygon', 'bitcoin', 'arbitrum'] },
+                chain: { type: 'string', enum: ['bitcoin', 'rgb', 'spark'] },
             },
             required: ['chain'],
         },
@@ -57,62 +57,13 @@ const TOOLS = [
             type: 'object',
             properties: {
                 amount: { type: 'string', description: 'Amount in human-readable units (e.g., "1.5" for 1.5 USDT)' },
-                symbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH'] },
-                chain: { type: 'string', enum: ['ethereum', 'polygon', 'bitcoin', 'arbitrum'] },
+                symbol: { type: 'string', enum: ['USDT', 'BTC', 'RGB'] },
+                chain: { type: 'string', enum: ['bitcoin', 'rgb', 'spark'] },
                 to: { type: 'string', description: 'Recipient address' },
                 reason: { type: 'string', description: 'Why this payment is being made' },
                 confidence: { type: 'number', minimum: 0, maximum: 1 },
             },
             required: ['amount', 'symbol', 'chain', 'to', 'reason', 'confidence'],
-        },
-    },
-    {
-        name: 'propose_swap',
-        description: 'Propose a token swap (e.g., USDT to XAUT). Goes through PolicyEngine.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                amount: { type: 'string', description: 'Amount in human-readable units' },
-                symbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH'] },
-                toSymbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH'] },
-                chain: { type: 'string', enum: ['ethereum', 'polygon', 'bitcoin', 'arbitrum'] },
-                reason: { type: 'string' },
-                confidence: { type: 'number', minimum: 0, maximum: 1 },
-            },
-            required: ['amount', 'symbol', 'toSymbol', 'chain', 'reason', 'confidence'],
-        },
-    },
-    {
-        name: 'propose_bridge',
-        description: 'Propose a cross-chain bridge (e.g., Ethereum to Arbitrum). Goes through PolicyEngine.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                amount: { type: 'string', description: 'Amount in human-readable units' },
-                symbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH'] },
-                fromChain: { type: 'string', enum: ['ethereum', 'polygon', 'bitcoin', 'arbitrum'] },
-                toChain: { type: 'string', enum: ['ethereum', 'polygon', 'bitcoin', 'arbitrum'] },
-                reason: { type: 'string' },
-                confidence: { type: 'number', minimum: 0, maximum: 1 },
-            },
-            required: ['amount', 'symbol', 'fromChain', 'toChain', 'reason', 'confidence'],
-        },
-    },
-    {
-        name: 'propose_yield',
-        description: 'Propose a yield deposit or withdrawal. Goes through PolicyEngine.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                amount: { type: 'string', description: 'Amount in human-readable units' },
-                symbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH'] },
-                chain: { type: 'string', enum: ['ethereum', 'polygon', 'bitcoin', 'arbitrum'] },
-                protocol: { type: 'string', description: 'DeFi protocol name (e.g., aave-v3)' },
-                action: { type: 'string', enum: ['deposit', 'withdraw'] },
-                reason: { type: 'string' },
-                confidence: { type: 'number', minimum: 0, maximum: 1 },
-            },
-            required: ['amount', 'symbol', 'chain', 'protocol', 'action', 'reason', 'confidence'],
         },
     },
     {
@@ -152,7 +103,7 @@ const TOOLS = [
                 description: { type: 'string' },
                 minPrice: { type: 'string' },
                 maxPrice: { type: 'string' },
-                symbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH'] },
+                symbol: { type: 'string', enum: ['USDT', 'BTC', 'RGB'] },
                 tags: { type: 'array', items: { type: 'string' }, description: 'Tags for discovery (e.g. ["defi", "yield", "portfolio"])' },
             },
             required: ['category', 'title', 'description', 'minPrice', 'maxPrice', 'symbol'],
@@ -192,7 +143,7 @@ const TOOLS = [
             properties: {
                 announcementId: { type: 'string', description: 'The announcement ID to bid on' },
                 price: { type: 'string', description: 'Bid price (e.g., "50")' },
-                symbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH'] },
+                symbol: { type: 'string', enum: ['USDT', 'BTC', 'RGB'] },
                 reason: { type: 'string', description: 'Why this agent is a good fit for the task' },
             },
             required: ['announcementId', 'price', 'symbol', 'reason'],
@@ -242,22 +193,6 @@ const TOOLS = [
             required: [],
         },
     },
-    {
-        name: 'identity_state',
-        description: 'Get ERC-8004 on-chain identity status (registration, agentId, wallet link).',
-        inputSchema: { type: 'object', properties: {}, required: [] },
-    },
-    {
-        name: 'query_reputation',
-        description: 'Query on-chain reputation from ERC-8004 ReputationRegistry.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                agentId: { type: 'string', description: 'ERC-8004 agent ID to query' },
-            },
-            required: ['agentId'],
-        },
-    },
     // ── RGB Asset Tools ──
     {
         name: 'rgb_issue',
@@ -302,10 +237,10 @@ const TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {
-                type: { type: 'string', enum: ['payment', 'swap', 'bridge', 'yield'] },
+                type: { type: 'string', enum: ['payment'] },
                 amount: { type: 'string' },
-                symbol: { type: 'string', enum: ['USDT', 'XAUT', 'USAT', 'BTC', 'ETH', 'RGB'] },
-                chain: { type: 'string', enum: ['ethereum', 'polygon', 'bitcoin', 'arbitrum', 'rgb'] },
+                symbol: { type: 'string', enum: ['USDT', 'BTC', 'RGB'] },
+                chain: { type: 'string', enum: ['bitcoin', 'rgb', 'spark'] },
                 to: { type: 'string' },
                 toSymbol: { type: 'string' },
                 confidence: { type: 'number', minimum: 0, maximum: 1 },
@@ -324,25 +259,6 @@ const TOOLS = [
             },
             required: [],
         },
-    },
-    // ── x402 Machine Payments ──
-    {
-        name: 'x402_fetch',
-        description: 'Make an HTTP request to an x402-enabled endpoint. Auto-detects 402 Payment Required, signs EIP-3009 authorization via wallet, and retries with payment. Uses USDT0 on Plasma/Stable chains.',
-        inputSchema: {
-            type: 'object',
-            properties: {
-                url: { type: 'string', description: 'The URL to fetch (must be x402-enabled)' },
-                method: { type: 'string', enum: ['GET', 'POST'], description: 'HTTP method (default: GET)' },
-                maxPaymentUsd: { type: 'number', description: 'Maximum payment in USD (default: 1.00)' },
-            },
-            required: ['url'],
-        },
-    },
-    {
-        name: 'x402_status',
-        description: 'Get x402 machine payment economics: total spent, total earned, requests completed/failed, services used.',
-        inputSchema: { type: 'object', properties: {}, required: [] },
     },
     // ── Spark / Lightning ──
     {
@@ -490,47 +406,6 @@ const handlers = {
             svc.companion.notifyExecution(result);
         return result;
     },
-    async propose_swap(params, svc) {
-        const symbol = params['symbol'];
-        const proposal = {
-            amount: toSmallestUnit(params['amount'], symbol),
-            symbol, toSymbol: params['toSymbol'], chain: params['chain'],
-            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
-            strategy: 'mcp-tool', timestamp: Date.now(),
-        };
-        const result = await svc.wallet.proposeSwap(proposal, 'mcp');
-        if (svc.companion && result)
-            svc.companion.notifyExecution(result);
-        return result;
-    },
-    async propose_bridge(params, svc) {
-        const symbol = params['symbol'];
-        const proposal = {
-            amount: toSmallestUnit(params['amount'], symbol),
-            symbol, chain: params['fromChain'],
-            fromChain: params['fromChain'], toChain: params['toChain'],
-            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
-            strategy: 'mcp-tool', timestamp: Date.now(),
-        };
-        const result = await svc.wallet.proposeBridge(proposal, 'mcp');
-        if (svc.companion && result)
-            svc.companion.notifyExecution(result);
-        return result;
-    },
-    async propose_yield(params, svc) {
-        const symbol = params['symbol'];
-        const proposal = {
-            amount: toSmallestUnit(params['amount'], symbol),
-            symbol, chain: params['chain'],
-            protocol: params['protocol'], action: params['action'],
-            reason: params['reason'], confidence: params['confidence'] ?? 1.0,
-            strategy: 'mcp-tool', timestamp: Date.now(),
-        };
-        const result = await svc.wallet.proposeYield(proposal, 'mcp');
-        if (svc.companion && result)
-            svc.companion.notifyExecution(result);
-        return result;
-    },
     async policy_status(_params, svc) {
         return { policies: await svc.wallet.queryPolicy() };
     },
@@ -545,7 +420,6 @@ const handlers = {
             swarmEnabled: !!svc.swarm,
             companionConnected: svc.companionConnected,
             eventsBuffered: svc.eventBus?.count ?? 0,
-            identity: svc.identity,
         };
     },
     async swarm_state(_params, svc) {
@@ -632,12 +506,6 @@ const handlers = {
         }
         return { rooms };
     },
-    async identity_state(_params, svc) {
-        return svc.identity;
-    },
-    async query_reputation(params, svc) {
-        return svc.wallet.queryReputation(params['agentId']);
-    },
     async rgb_issue(params, svc) {
         const proposal = {
             ticker: params['ticker'], name: params['name'],
@@ -682,21 +550,6 @@ const handlers = {
             return { events: [] };
         const limit = typeof params['limit'] === 'number' ? params['limit'] : 50;
         return { events: svc.eventBus.getRecent(limit) };
-    },
-    // ── x402 Machine Payments ──
-    async x402_fetch(params, svc) {
-        if (!svc.x402)
-            return { error: 'x402 client not enabled. Set X402_ENABLED=true.' };
-        const url = params['url'];
-        const method = params['method'] || 'GET';
-        const maxPaymentUsd = params['maxPaymentUsd'] || 1.0;
-        const result = await svc.x402.fetch(url, { method }, maxPaymentUsd);
-        return result;
-    },
-    async x402_status(_params, svc) {
-        if (!svc.x402)
-            return { enabled: false, economics: null };
-        return { enabled: true, economics: svc.x402.getEconomics(), services: svc.x402.getServices() };
     },
     // ── Spark / Lightning ──
     async spark_balance(_params, svc) {

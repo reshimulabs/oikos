@@ -2,7 +2,7 @@
  * Oikos App — Entry Point
  *
  * Agent-agnostic wallet infrastructure. Spawns the wallet isolate,
- * starts all services (swarm, companion, events, pricing, RGB),
+ * starts all services (swarm, companion, events, RGB),
  * and serves MCP + REST + CLI for any agent to connect.
  *
  * No LLM. No brain. No plugin. Just infrastructure.

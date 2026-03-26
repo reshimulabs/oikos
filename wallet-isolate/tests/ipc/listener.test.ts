@@ -23,7 +23,7 @@ describe('IPCListener: valid messages', () => {
         to: '0x1234567890abcdef1234567890abcdef12345678',
         amount: '1000000',
         symbol: 'USDT',
-        chain: 'ethereum',
+        chain: 'bitcoin',
         reason: 'Test',
         confidence: 0.8,
         strategy: 'threshold',
@@ -48,7 +48,7 @@ describe('IPCListener: valid messages', () => {
     listener.feed(JSON.stringify({
       id: 'q-1',
       type: 'query_balance',
-      payload: { chain: 'ethereum', symbol: 'USDT' }
+      payload: { chain: 'bitcoin', symbol: 'USDT' }
     }) + '\n');
 
     assert.equal(messages.length, 1);
@@ -62,7 +62,7 @@ describe('IPCListener: valid messages', () => {
       () => {}
     );
 
-    const msg1 = JSON.stringify({ id: '1', type: 'query_address', payload: { chain: 'ethereum' } });
+    const msg1 = JSON.stringify({ id: '1', type: 'query_address', payload: { chain: 'bitcoin' } });
     const msg2 = JSON.stringify({ id: '2', type: 'query_policy', payload: {} });
 
     listener.feed(msg1 + '\n' + msg2 + '\n');
@@ -112,7 +112,7 @@ describe('IPCListener: malformed messages', () => {
       (line, error) => malformed.push({ line, error })
     );
 
-    listener.feed(JSON.stringify({ type: 'query_address', payload: { chain: 'ethereum' } }) + '\n');
+    listener.feed(JSON.stringify({ type: 'query_address', payload: { chain: 'bitcoin' } }) + '\n');
 
     assert.equal(messages.length, 0);
     assert.equal(malformed.length, 1);
@@ -166,7 +166,7 @@ describe('IPCListener: malformed messages', () => {
         to: '0x1234567890abcdef1234567890abcdef12345678',
         amount: '-1000',
         symbol: 'USDT',
-        chain: 'ethereum',
+        chain: 'bitcoin',
         reason: 'steal',
         confidence: 0.9,
         strategy: 'attack',
@@ -193,7 +193,7 @@ describe('IPCListener: malformed messages', () => {
         to: '0x1234567890abcdef1234567890abcdef12345678',
         amount: '1000000',
         symbol: 'USDT',
-        chain: 'ethereum',
+        chain: 'bitcoin',
         reason: 'test',
         confidence: 1.5, // Invalid: > 1.0
         strategy: 'test',

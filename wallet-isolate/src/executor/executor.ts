@@ -3,7 +3,7 @@
  *
  * Flow: evaluate policy -> if approved -> execute operation -> log result
  *
- * Handles all proposal types: payment, swap, bridge, yield.
+ * Handles all proposal types: payment, rgb_issue, rgb_transfer.
  *
  * @security This is the most critical module in the entire system.
  * A rejected proposal MUST NEVER result in a signed transaction.
@@ -16,10 +16,6 @@
 import type {
   ProposalCommon,
   PaymentProposal,
-  SwapProposal,
-  BridgeProposal,
-  YieldProposal,
-  FeedbackProposal,
   RGBIssueProposal,
   RGBTransferProposal,
   ExecutionResult,
@@ -114,29 +110,6 @@ export class ProposalExecutor {
       case 'payment': {
         const p = proposal as PaymentProposal;
         return this.wallet.sendTransaction(p.chain, p.to, BigInt(p.amount), p.symbol);
-      }
-      case 'swap': {
-        const p = proposal as SwapProposal;
-        return this.wallet.swap(p.chain, p.symbol, p.toSymbol, BigInt(p.amount));
-      }
-      case 'bridge': {
-        const p = proposal as BridgeProposal;
-        return this.wallet.bridge(p.fromChain, p.toChain, p.symbol, BigInt(p.amount));
-      }
-      case 'yield': {
-        const p = proposal as YieldProposal;
-        if (p.action === 'deposit') {
-          return this.wallet.deposit(p.chain, p.symbol, BigInt(p.amount), p.protocol);
-        } else {
-          return this.wallet.withdraw(p.chain, p.symbol, BigInt(p.amount), p.protocol);
-        }
-      }
-      case 'feedback': {
-        const p = proposal as FeedbackProposal;
-        return this.wallet.giveFeedback(
-          p.chain, p.targetAgentId, p.feedbackValue, 2,
-          p.tag1, p.tag2, p.endpoint, p.feedbackURI, p.feedbackHash
-        );
       }
       case 'rgb_issue': {
         const p = proposal as RGBIssueProposal;

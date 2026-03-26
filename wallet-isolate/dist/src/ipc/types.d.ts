@@ -7,10 +7,10 @@
  * Messages are newline-delimited JSON over stdin/stdout.
  * Every request gets exactly one response, correlated by `id`.
  */
-export type TokenSymbol = 'USDT' | 'BTC' | 'XAUT' | 'USAT' | 'ETH' | 'RGB';
-export type Chain = 'ethereum' | 'polygon' | 'bitcoin' | 'arbitrum' | 'rgb' | 'spark';
+export type TokenSymbol = 'USDT' | 'BTC' | 'RGB';
+export type Chain = 'bitcoin' | 'rgb' | 'spark';
 /** Source of a proposal — used for audit trail attribution */
-export type ProposalSource = 'llm' | 'x402' | 'companion' | 'swarm';
+export type ProposalSource = 'llm' | 'companion' | 'swarm' | 'mcp';
 /** Common fields shared by all proposal types. PolicyEngine evaluates these. */
 export interface ProposalCommon {
     amount: string;
@@ -24,30 +24,6 @@ export interface ProposalCommon {
 /** Send tokens to a recipient address */
 export interface PaymentProposal extends ProposalCommon {
     to: string;
-}
-/** Swap between token pairs (e.g., USDt → XAUt) */
-export interface SwapProposal extends ProposalCommon {
-    toSymbol: TokenSymbol;
-}
-/** Move tokens cross-chain (e.g., Ethereum → Arbitrum) */
-export interface BridgeProposal extends ProposalCommon {
-    fromChain: Chain;
-    toChain: Chain;
-}
-/** Deposit/withdraw from yield protocols */
-export interface YieldProposal extends ProposalCommon {
-    protocol: string;
-    action: 'deposit' | 'withdraw';
-}
-/** Submit on-chain reputation feedback for a peer agent (ERC-8004) */
-export interface FeedbackProposal extends ProposalCommon {
-    targetAgentId: string;
-    feedbackValue: number;
-    tag1: string;
-    tag2: string;
-    endpoint: string;
-    feedbackURI: string;
-    feedbackHash: string;
 }
 /** Issue a new RGB asset on Bitcoin */
 export interface RGBIssueProposal extends ProposalCommon {
@@ -68,7 +44,7 @@ export interface RGBAssetInfo {
     balance: string;
 }
 /** Discriminated union of all proposal types */
-export type AnyProposal = PaymentProposal | SwapProposal | BridgeProposal | YieldProposal | FeedbackProposal | RGBIssueProposal | RGBTransferProposal;
+export type AnyProposal = PaymentProposal | RGBIssueProposal | RGBTransferProposal;
 export interface BalanceQuery {
     chain: Chain;
     symbol: TokenSymbol;
@@ -85,53 +61,6 @@ export interface AuditQuery {
     limit?: number;
     since?: number;
 }
-/** Register an on-chain ERC-8004 identity (mints ERC-721 NFT). */
-export interface IdentityRegisterRequest {
-    agentURI: string;
-    chain: Chain;
-}
-/** Link the wallet's EOA address to its ERC-8004 identity NFT. */
-export interface IdentitySetWalletRequest {
-    agentId: string;
-    deadline: number;
-    chain: Chain;
-}
-/** Query on-chain reputation for a given ERC-8004 agent. */
-export interface ReputationQuery {
-    agentId: string;
-    chain: Chain;
-    tag1?: string;
-    tag2?: string;
-    clientAddresses?: string[];
-}
-/** Read a single on-chain feedback entry. */
-export interface FeedbackReadQuery {
-    agentId: string;
-    clientAddress: string;
-    feedbackIndex: number;
-    chain: Chain;
-}
-/** Get all clients who gave feedback for an agent. */
-export interface ClientsQuery {
-    agentId: string;
-    chain: Chain;
-}
-/** Append a response to feedback (defend reputation). */
-export interface AppendResponseRequest {
-    agentId: string;
-    clientAddress: string;
-    feedbackIndex: number;
-    responseURI: string;
-    responseHash: string;
-    chain: Chain;
-}
-/** Set metadata on the identity NFT. */
-export interface SetMetadataRequest {
-    agentId: string;
-    key: string;
-    valueHex: string;
-    chain: Chain;
-}
 export interface SparkInvoiceRequest {
     amountSats?: number;
     memo?: string;
@@ -140,30 +69,7 @@ export interface SparkPayInvoiceRequest {
     encodedInvoice: string;
     maxFeeSats?: number;
 }
-/** EIP-712 typed data for x402 signing (transferWithAuthorization) */
-export interface X402SignRequest {
-    domain: {
-        name?: string;
-        version?: string;
-        chainId?: number;
-        verifyingContract?: string;
-        salt?: string;
-    };
-    types: Record<string, Array<{
-        name: string;
-        type: string;
-    }>>;
-    message: Record<string, unknown>;
-    /** Amount in token smallest units — used for policy evaluation */
-    policyAmount: string;
-    /** Recipient address — used for policy evaluation */
-    policyRecipient: string;
-    /** Chain for policy evaluation */
-    policyChain: Chain;
-    /** Symbol for policy evaluation */
-    policySymbol: TokenSymbol;
-}
-export type IPCRequestType = 'propose_payment' | 'propose_swap' | 'propose_bridge' | 'propose_yield' | 'propose_feedback' | 'propose_rgb_issue' | 'propose_rgb_transfer' | 'identity_register' | 'identity_set_wallet' | 'query_balance' | 'query_balance_all' | 'query_address' | 'query_policy' | 'query_audit' | 'query_reputation' | 'query_rgb_assets' | 'query_policy_check' | 'spark_create_invoice' | 'spark_pay_invoice' | 'spark_deposit_address' | 'spark_get_transfers' | 'x402_sign' | 'x402_get_address' | 'query_feedback' | 'query_clients' | 'identity_append_response' | 'identity_set_metadata';
+export type IPCRequestType = 'propose_payment' | 'propose_rgb_issue' | 'propose_rgb_transfer' | 'query_balance' | 'query_balance_all' | 'query_address' | 'query_policy' | 'query_audit' | 'query_rgb_assets' | 'query_policy_check' | 'spark_create_invoice' | 'spark_pay_invoice' | 'spark_deposit_address' | 'spark_get_transfers';
 /** Dry-run policy check result — evaluate without executing or recording */
 export interface PolicyCheckResult {
     wouldApprove: boolean;
@@ -174,7 +80,7 @@ export interface IPCRequest {
     id: string;
     type: IPCRequestType;
     source?: ProposalSource;
-    payload: PaymentProposal | SwapProposal | BridgeProposal | YieldProposal | FeedbackProposal | RGBIssueProposal | RGBTransferProposal | IdentityRegisterRequest | IdentitySetWalletRequest | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery | ReputationQuery | FeedbackReadQuery | ClientsQuery | AppendResponseRequest | SetMetadataRequest | SparkInvoiceRequest | SparkPayInvoiceRequest | X402SignRequest;
+    payload: PaymentProposal | RGBIssueProposal | RGBTransferProposal | BalanceQuery | BalanceAllQuery | AddressQuery | PolicyQuery | AuditQuery | SparkInvoiceRequest | SparkPayInvoiceRequest | Record<string, unknown>;
 }
 export interface ExecutionResult {
     status: 'executed' | 'rejected' | 'failed';
@@ -205,39 +111,11 @@ export interface PolicyStatusResponse {
 export interface AuditEntryResponse {
     entries: AuditEntry[];
 }
-/** Result of an ERC-8004 identity lifecycle operation. */
-export interface IdentityResult {
-    status: 'registered' | 'wallet_set' | 'failed';
-    agentId?: string;
-    txHash?: string;
-    error?: string;
-}
-/** On-chain reputation query result from ERC-8004 ReputationRegistry. */
-export interface ReputationResult {
-    agentId: string;
-    feedbackCount: number;
-    totalValue: string;
-    valueDecimals: number;
-}
-/** Single feedback entry read from on-chain. */
-export interface FeedbackReadResult {
-    agentId: string;
-    clientAddress: string;
-    feedbackIndex: number;
-    value: number;
-    valueDecimals: number;
-    isRevoked: boolean;
-}
-/** List of clients who gave feedback. */
-export interface ClientsResult {
-    agentId: string;
-    clients: string[];
-}
-export type IPCResponseType = 'execution_result' | 'balance' | 'balance_all' | 'address' | 'policy_status' | 'audit_entries' | 'identity_result' | 'reputation_result' | 'rgb_assets' | 'policy_check' | 'spark_invoice' | 'spark_pay_result' | 'spark_deposit' | 'spark_transfers' | 'x402_signature' | 'x402_address' | 'feedback_read' | 'clients_result' | 'error';
+export type IPCResponseType = 'execution_result' | 'balance' | 'balance_all' | 'address' | 'policy_status' | 'audit_entries' | 'rgb_assets' | 'policy_check' | 'spark_invoice' | 'spark_pay_result' | 'spark_deposit' | 'spark_transfers' | 'error';
 export interface IPCResponse {
     id: string;
     type: IPCResponseType;
-    payload: ExecutionResult | BalanceResponse | BalanceResponse[] | AddressResponse | PolicyStatusResponse | AuditEntryResponse | IdentityResult | ReputationResult | RGBAssetInfo[] | PolicyCheckResult | Record<string, unknown> | {
+    payload: ExecutionResult | BalanceResponse | BalanceResponse[] | AddressResponse | PolicyStatusResponse | AuditEntryResponse | RGBAssetInfo[] | PolicyCheckResult | Record<string, unknown> | {
         message: string;
     };
 }

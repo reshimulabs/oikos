@@ -14,10 +14,6 @@ export type {
   ProposalSource,
   ProposalCommon,
   PaymentProposal,
-  SwapProposal,
-  BridgeProposal,
-  YieldProposal,
-  FeedbackProposal,
   AnyProposal,
   BalanceQuery,
   AddressQuery,
@@ -26,11 +22,6 @@ export type {
   BalanceResponse,
   AddressResponse,
   PolicyStatus,
-  IdentityRegisterRequest,
-  IdentitySetWalletRequest,
-  ReputationQuery,
-  IdentityResult,
-  ReputationResult,
   IPCRequest,
   IPCResponse,
   IPCRequestType,
@@ -42,7 +33,6 @@ export type {
   OikosServices,
   SwarmInterface,
   SwarmAnnounceOpts,
-  IdentityState,
   CompanionInstruction,
 } from './types.js';
 
@@ -70,15 +60,6 @@ export type {
   SwarmEventData,
   EventSource,
 } from './events/types.js';
-
-// ── Pricing ──
-
-export { PricingService } from './pricing/client.js';
-export type {
-  AssetPrice as PricingAssetPrice,
-  PortfolioValuation as PricingPortfolioValuation,
-  PricePoint,
-} from './pricing/client.js';
 
 // ── Swarm ──
 
@@ -120,11 +101,6 @@ export { startTransportBridge } from './rgb/transport-bridge.js';
 // ── Amount Conversion ──
 
 export { toSmallestUnit, toHumanReadable, getDecimals } from './amounts.js';
-
-// ── x402 ──
-
-export { X402Client } from './x402/client.js';
-export type { X402PaymentRequired, X402SignedPayment, X402Service, X402Economics } from './x402/types.js';
 
 // ── Creators ──
 

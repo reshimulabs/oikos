@@ -31,10 +31,6 @@ export interface WalletContext {
         status?: string;
         timestamp?: string;
     }>;
-    identity: {
-        registered: boolean;
-        agentId: string | null;
-    };
     swarmPeers: number;
     swarmAnnouncements: Array<{
         id: string;
@@ -56,22 +52,6 @@ export interface WalletContext {
         name: string;
         content: string;
     }>;
-    /** Live asset prices from Bitfinex */
-    prices: Array<{
-        symbol: string;
-        priceUsd: number;
-        source: string;
-    }>;
-    /** Pre-calculated portfolio valuation */
-    portfolio: {
-        totalUsd: number;
-        assets: Array<{
-            symbol: string;
-            humanBalance: number;
-            usdValue: number;
-            pct: number;
-        }>;
-    };
 }
 /** Chat message stored in history */
 export interface ChatMessage {

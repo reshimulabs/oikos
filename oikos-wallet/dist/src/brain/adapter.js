@@ -20,7 +20,7 @@
  * The Modelfile (oikos-wallet/Modelfile) bakes in the core identity;
  * this prompt covers tools + rules only when using the stock model.
  */
-const WALLET_SYSTEM_PROMPT = `You are the Oikos Agent managing a self-custodial crypto wallet.
+const WALLET_SYSTEM_PROMPT = `You are the Oikos Agent managing a self-custodial Bitcoin/RGB wallet.
 
 TO EXECUTE A TOOL, output an ACTION line with valid JSON. The system will parse and execute it automatically.
 
@@ -28,25 +28,24 @@ FORMAT (one action per line, must be valid JSON):
 ACTION: {"tool": "TOOL_NAME", "args": {ARGS}}
 
 EXAMPLES:
-User: "sell 0.1 XAUT on arbitrum for best offer"
-ACTION: {"tool": "swarm_announce", "args": {"category": "seller", "title": "Sell 0.1 XAUT", "description": "Selling 0.1 XAUT on Arbitrum for best offer", "minPrice": "0", "maxPrice": "10000", "symbol": "USDT", "tags": ["XAUT", "Arbitrum"]}}
+User: "sell 100 USDT for best offer"
+ACTION: {"tool": "swarm_announce", "args": {"category": "seller", "title": "Sell 100 USDT", "description": "Selling 100 USDT for best offer", "minPrice": "0", "maxPrice": "10000", "symbol": "USDT", "tags": ["USDT"]}}
 
-User: "send 10 USDT to 0xABC on ethereum"
-ACTION: {"tool": "propose_payment", "args": {"amount": "10", "symbol": "USDT", "chain": "ethereum", "to": "0xABC", "reason": "user requested", "confidence": 0.9}}
-
-User: "swap 50 USDT to XAUT"
-ACTION: {"tool": "propose_swap", "args": {"amount": "50", "symbol": "USDT", "toSymbol": "XAUT", "chain": "ethereum", "reason": "user requested", "confidence": 0.9}}
+User: "send 10 USDT to bc1..."
+ACTION: {"tool": "propose_payment", "args": {"amount": "10", "symbol": "USDT", "chain": "bitcoin", "to": "bc1...", "reason": "user requested", "confidence": 0.9}}
 
 User: "check balances"
 ACTION: {"tool": "wallet_balance_all", "args": {}}
 
 AVAILABLE TOOLS:
-Wallet: propose_payment, propose_swap, propose_bridge, propose_yield, wallet_balance_all, wallet_address, policy_status
+Wallet: propose_payment, wallet_balance_all, wallet_address, policy_status
+RGB: rgb_issue, rgb_transfer, rgb_assets
+Spark: spark_balance, spark_address, spark_send, spark_create_invoice, spark_pay_invoice, spark_get_transfers
 Swarm: swarm_announce, swarm_remove_announcement(announcementId), swarm_bid, swarm_accept_bid, swarm_submit_payment, swarm_cancel_room, swarm_room_state, swarm_state
 Read: audit_log, agent_state
 
 RULES:
-- When the user gives a COMMAND (send, swap, sell, buy, bridge, deposit, announce, remove), output an ACTION line immediately.
+- When the user gives a COMMAND (send, sell, buy, announce, remove), output an ACTION line immediately.
 - When the user asks a QUESTION (what strategy, should I, how, why, explain), ANSWER with advice. Do NOT execute actions unless explicitly told "do it".
 - You can include a brief explanation before or after an ACTION line.
 - All writes go through PolicyEngine. If rejected, explain the violation.
@@ -167,15 +166,6 @@ export class OllamaBrainAdapter {
     /** Build compact wallet state block — minimal tokens, max info density */
     _buildContext(ctx) {
         const lines = [];
-        // Live prices — the model MUST have these to calculate USD values
-        if (ctx.prices.length > 0) {
-            lines.push('Live Prices: ' + ctx.prices.map(p => `${p.symbol}=$${p.priceUsd}`).join(', '));
-        }
-        // Portfolio valuation — pre-calculated so model doesn't need to do math
-        if (ctx.portfolio.totalUsd > 0) {
-            lines.push(`Portfolio: $${ctx.portfolio.totalUsd.toFixed(2)} USD`);
-            lines.push('Holdings: ' + ctx.portfolio.assets.map(a => `${a.symbol}: ${a.humanBalance.toFixed(a.symbol === 'BTC' ? 6 : 2)} ($${a.usdValue.toFixed(0)}, ${a.pct.toFixed(1)}%)`).join(', '));
-        }
         // Raw balances per chain (for chain-specific queries)
         if (ctx.balances.length > 0) {
             lines.push('Balances by chain: ' + ctx.balances.map(b => `${b.symbol}/${b.chain}=${b.formatted}`).join(', '));
@@ -186,10 +176,6 @@ export class OllamaBrainAdapter {
         // Policies — compact
         if (ctx.policies.length > 0) {
             lines.push('Policies: ' + ctx.policies.map(p => `${p.rule}:${p.remaining ?? p.status ?? 'ok'}`).join(', '));
-        }
-        // Identity
-        if (ctx.identity.registered) {
-            lines.push(`Identity: ERC-8004 agentId=${ctx.identity.agentId}`);
         }
         // Swarm — compact
         if (ctx.swarmPeers > 0 || ctx.swarmAnnouncements.length > 0) {
@@ -271,9 +257,6 @@ export class MockBrainAdapter {
             const lines = context.balances.map(b => `${b.symbol} (${b.chain}): ${b.formatted}`);
             return `Current portfolio:\n${lines.join('\n')}`;
         }
-        if (lower.includes('swap') || lower.includes('trade')) {
-            return 'I can propose a swap for you. What token pair and amount? For example: "swap 10 USDT to XAUT"';
-        }
         if (lower.includes('send') || lower.includes('pay') || lower.includes('transfer')) {
             return 'I can propose a payment. Please specify: amount, token, and recipient address.';
         }
@@ -284,9 +267,9 @@ export class MockBrainAdapter {
             return `Policy status:\n${lines.join('\n')}`;
         }
         if (lower.includes('hello') || lower.includes('hi') || lower.includes('hey')) {
-            return `Hello! I'm your Oikos agent. I manage a multi-chain wallet with ${context.balances.length} asset(s) and ${context.swarmPeers} swarm peer(s). How can I help?`;
+            return `Hello! I'm your Oikos agent. I manage a Bitcoin/RGB wallet with ${context.balances.length} asset(s) and ${context.swarmPeers} swarm peer(s). How can I help?`;
         }
-        return `Understood: "${message}". I'm monitoring the wallet and swarm. Ask me about balances, swaps, payments, or policy status.`;
+        return `Understood: "${message}". I'm monitoring the wallet and swarm. Ask me about balances, payments, or policy status.`;
     }
 }
 export function createBrainAdapter(config) {
@@ -342,53 +325,11 @@ export async function buildWalletContext(services) {
         }
     }
     catch { /* strategies dir doesn't exist yet — fine */ }
-    // Fetch live prices from pricing service
-    const prices = [];
-    if (services.pricing) {
-        try {
-            const priceData = await services.pricing.getAllPrices();
-            if (priceData && Array.isArray(priceData)) {
-                for (const p of priceData) {
-                    if (p.symbol && p.priceUsd)
-                        prices.push({ symbol: p.symbol, priceUsd: p.priceUsd, source: p.source || 'live' });
-                }
-            }
-        }
-        catch { /* pricing not available */ }
-    }
-    // Calculate portfolio valuation using live prices
-    const priceMap = { USDT: 1, USAT: 1 };
-    for (const p of prices)
-        priceMap[p.symbol] = p.priceUsd;
-    const assetTotals = {};
     const typedBalances = balances;
-    for (const b of typedBalances) {
-        const human = parseFloat(b.formatted) || 0;
-        const price = priceMap[b.symbol] || 0;
-        if (!assetTotals[b.symbol])
-            assetTotals[b.symbol] = { humanBalance: 0, usdValue: 0 };
-        const entry = assetTotals[b.symbol];
-        if (entry) {
-            entry.humanBalance += human;
-            entry.usdValue += human * price;
-        }
-    }
-    const totalUsd = Object.values(assetTotals).reduce((s, a) => s + a.usdValue, 0);
-    const portfolioAssets = Object.entries(assetTotals)
-        .map(([symbol, data]) => ({
-        symbol,
-        humanBalance: data.humanBalance,
-        usdValue: data.usdValue,
-        pct: totalUsd > 0 ? (data.usdValue / totalUsd) * 100 : 0,
-    }))
-        .sort((a, b) => b.usdValue - a.usdValue);
     return {
         balances: typedBalances,
         policies: policies,
         recentAudit: audit,
-        identity: services.identity,
-        prices,
-        portfolio: { totalUsd, assets: portfolioAssets },
         swarmPeers: swarmState?.boardPeers?.length ?? 0,
         swarmAnnouncements: (swarmState?.announcements ?? []).map(a => ({
             id: a.id, title: a.title, category: a.category, agentName: a.agentName, priceRange: a.priceRange,

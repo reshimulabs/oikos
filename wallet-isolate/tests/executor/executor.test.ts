@@ -17,8 +17,8 @@ function makeProposal(overrides: Partial<PaymentProposal> = {}): PaymentProposal
   return {
     to: '0x1234567890abcdef1234567890abcdef12345678',
     amount: '1000000',
-    symbol: 'USDT',
-    chain: 'ethereum',
+    symbol: 'BTC',
+    chain: 'bitcoin',
     reason: 'Test tip',
     confidence: 0.85,
     strategy: 'test',
@@ -32,7 +32,7 @@ async function createTestExecutor() {
   const audit = new AuditLog((line) => auditLines.push(line));
 
   const wallet = new MockWalletManager();
-  await wallet.initialize('test-seed', [{ chain: 'ethereum' }]);
+  await wallet.initialize('test-seed', [{ chain: 'bitcoin' }]);
 
   return { auditLines, audit, wallet };
 }
@@ -42,7 +42,7 @@ describe('ProposalExecutor: rejected proposals never sign', () => {
     const { audit, wallet } = await createTestExecutor();
     const policy = new PolicyEngine({
       policies: [{ id: 'strict', name: 'Strict', rules: [
-        { type: 'max_per_tx', amount: '500000', symbol: 'USDT' } // 0.5 USDT max
+        { type: 'max_per_tx', amount: '500000', symbol: 'BTC' } // 0.5 USDT max
       ]}]
     });
     const executor = new ProposalExecutor(policy, wallet, audit);
@@ -58,14 +58,14 @@ describe('ProposalExecutor: rejected proposals never sign', () => {
     const { audit, wallet } = await createTestExecutor();
     const policy = new PolicyEngine({
       policies: [{ id: 'strict', name: 'Strict', rules: [
-        { type: 'max_per_tx', amount: '500000', symbol: 'USDT' }
+        { type: 'max_per_tx', amount: '500000', symbol: 'BTC' }
       ]}]
     });
     const executor = new ProposalExecutor(policy, wallet, audit);
 
-    const balanceBefore = await wallet.getBalance('ethereum', 'USDT');
+    const balanceBefore = await wallet.getBalance('bitcoin', 'BTC');
     await executor.execute('payment', makeProposal({ amount: '1000000' }));
-    const balanceAfter = await wallet.getBalance('ethereum', 'USDT');
+    const balanceAfter = await wallet.getBalance('bitcoin', 'BTC');
 
     assert.equal(balanceBefore.raw, balanceAfter.raw);
   });
@@ -74,7 +74,7 @@ describe('ProposalExecutor: rejected proposals never sign', () => {
     const { audit, wallet } = await createTestExecutor();
     const policy = new PolicyEngine({
       policies: [{ id: 'lenient', name: 'Lenient', rules: [
-        { type: 'max_per_tx', amount: '10000000', symbol: 'USDT' }
+        { type: 'max_per_tx', amount: '10000000', symbol: 'BTC' }
       ]}]
     });
     const executor = new ProposalExecutor(policy, wallet, audit);
@@ -105,7 +105,7 @@ describe('ProposalExecutor: rejected proposals never sign', () => {
     const { audit, wallet, auditLines } = await createTestExecutor();
     const policy = new PolicyEngine({
       policies: [{ id: 'test', name: 'Test', rules: [
-        { type: 'max_per_tx', amount: '5000000', symbol: 'USDT' }
+        { type: 'max_per_tx', amount: '5000000', symbol: 'BTC' }
       ]}]
     });
     const executor = new ProposalExecutor(policy, wallet, audit);
@@ -149,7 +149,7 @@ describe('ProposalExecutor: session budget exhaustion', () => {
     const { audit, wallet } = await createTestExecutor();
     const policy = new PolicyEngine({
       policies: [{ id: 'test', name: 'Test', rules: [
-        { type: 'max_per_session', amount: '3000000', symbol: 'USDT' }
+        { type: 'max_per_session', amount: '3000000', symbol: 'BTC' }
       ]}]
     });
     const executor = new ProposalExecutor(policy, wallet, audit);

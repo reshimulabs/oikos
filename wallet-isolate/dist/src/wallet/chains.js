@@ -6,14 +6,6 @@
  */
 export const TESTNET_CHAINS = [
     {
-        chain: 'ethereum',
-        provider: 'https://ethereum-sepolia-rpc.publicnode.com'
-    },
-    {
-        chain: 'arbitrum',
-        provider: 'https://sepolia-rollup.arbitrum.io/rpc'
-    },
-    {
         chain: 'bitcoin',
         network: 'testnet',
         host: 'electrum.blockstream.info',
@@ -22,12 +14,6 @@ export const TESTNET_CHAINS = [
     {
         chain: 'spark',
         network: 'REGTEST' // MAINNET | SIGNET | REGTEST
-    }
-];
-export const SEPOLIA_ONLY = [
-    {
-        chain: 'ethereum',
-        provider: 'https://ethereum-sepolia-rpc.publicnode.com'
     }
 ];
 //# sourceMappingURL=chains.js.map

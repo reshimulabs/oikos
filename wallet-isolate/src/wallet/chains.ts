@@ -9,14 +9,6 @@ import type { ChainConfig } from './types.js';
 
 export const TESTNET_CHAINS: ChainConfig[] = [
   {
-    chain: 'ethereum',
-    provider: 'https://ethereum-sepolia-rpc.publicnode.com'
-  },
-  {
-    chain: 'arbitrum',
-    provider: 'https://sepolia-rollup.arbitrum.io/rpc'
-  },
-  {
     chain: 'bitcoin',
     network: 'testnet',
     host: 'electrum.blockstream.info',
@@ -25,12 +17,5 @@ export const TESTNET_CHAINS: ChainConfig[] = [
   {
     chain: 'spark',
     network: 'REGTEST'  // MAINNET | SIGNET | REGTEST
-  }
-];
-
-export const SEPOLIA_ONLY: ChainConfig[] = [
-  {
-    chain: 'ethereum',
-    provider: 'https://ethereum-sepolia-rpc.publicnode.com'
   }
 ];

@@ -14,10 +14,6 @@ import type {
   IPCRequest,
   IPCResponse,
   PaymentProposal,
-  SwapProposal,
-  BridgeProposal,
-  YieldProposal,
-  FeedbackProposal,
   RGBIssueProposal,
   RGBTransferProposal,
   RGBAssetInfo,
@@ -31,11 +27,6 @@ import type {
   AddressResponse,
   PolicyStatus,
   PolicyCheckResult,
-  IdentityRegisterRequest,
-  IdentitySetWalletRequest,
-  ReputationQuery,
-  IdentityResult,
-  ReputationResult,
 } from './types.js';
 
 /** Pending request waiting for a response */
@@ -149,46 +140,17 @@ export class WalletIPCClient {
     return response.payload as ExecutionResult;
   }
 
-  /** Propose a token swap (e.g., USDT → XAUT) */
-  async proposeSwap(proposal: SwapProposal, source?: ProposalSource): Promise<ExecutionResult> {
-    const response = await this.send('propose_swap', proposal, source);
-    return response.payload as ExecutionResult;
-  }
-
-  /** Propose a cross-chain bridge (e.g., Ethereum → Arbitrum) */
-  async proposeBridge(proposal: BridgeProposal, source?: ProposalSource): Promise<ExecutionResult> {
-    const response = await this.send('propose_bridge', proposal, source);
-    return response.payload as ExecutionResult;
-  }
-
-  /** Propose a yield deposit or withdrawal */
-  async proposeYield(proposal: YieldProposal, source?: ProposalSource): Promise<ExecutionResult> {
-    const response = await this.send('propose_yield', proposal, source);
-    return response.payload as ExecutionResult;
-  }
-
   /**
    * Universal entry point for external proposal sources.
    * Routes to the appropriate propose method with source attribution.
-   * Used by x402 client, companion channel, and swarm negotiation.
+   * Used by companion channel and swarm negotiation.
    */
   async proposalFromExternal(
     source: ProposalSource,
-    type: 'payment' | 'swap' | 'bridge' | 'yield' | 'feedback',
+    _type: 'payment',
     proposal: ProposalCommon
   ): Promise<ExecutionResult> {
-    switch (type) {
-      case 'payment':
-        return this.proposePayment(proposal as PaymentProposal, source);
-      case 'swap':
-        return this.proposeSwap(proposal as SwapProposal, source);
-      case 'bridge':
-        return this.proposeBridge(proposal as BridgeProposal, source);
-      case 'yield':
-        return this.proposeYield(proposal as YieldProposal, source);
-      case 'feedback':
-        return this.proposeFeedback(proposal as FeedbackProposal, source);
-    }
+    return this.proposePayment(proposal as PaymentProposal, source);
   }
 
   // ── Query API ──
@@ -226,39 +188,6 @@ export class WalletIPCClient {
     const response = await this.send('query_audit', query);
     const payload = response.payload as { entries: unknown[] };
     return payload.entries;
-  }
-
-  // ── ERC-8004 Identity & Reputation ──
-
-  /** Register an on-chain ERC-8004 identity (mints ERC-721 NFT). */
-  async registerIdentity(agentURI: string, chain = 'ethereum' as const): Promise<IdentityResult> {
-    const payload: IdentityRegisterRequest = { agentURI, chain };
-    const response = await this.send('identity_register', payload);
-    return response.payload as IdentityResult;
-  }
-
-  /** Set the agent's wallet address on the IdentityRegistry (EIP-712 signed). */
-  async setAgentWallet(agentId: string, deadline: number, chain = 'ethereum' as const): Promise<IdentityResult> {
-    const payload: IdentitySetWalletRequest = { agentId, deadline, chain };
-    const response = await this.send('identity_set_wallet', payload);
-    return response.payload as IdentityResult;
-  }
-
-  /** Submit on-chain reputation feedback for a peer agent. */
-  async proposeFeedback(proposal: FeedbackProposal, source?: ProposalSource): Promise<ExecutionResult> {
-    const response = await this.send('propose_feedback', proposal, source);
-    return response.payload as ExecutionResult;
-  }
-
-  /** Query on-chain reputation from ERC-8004 ReputationRegistry. */
-  async queryReputation(
-    agentId: string,
-    chain = 'ethereum' as const,
-    opts?: { tag1?: string; tag2?: string; clientAddresses?: string[] },
-  ): Promise<ReputationResult> {
-    const payload: ReputationQuery = { agentId, chain, ...opts };
-    const response = await this.send('query_reputation', payload);
-    return response.payload as ReputationResult;
   }
 
   // ── Dry-Run Policy Check ──
@@ -377,41 +306,6 @@ export class WalletIPCClient {
       return p.transfers || [];
     } catch {
       return [];
-    }
-  }
-
-  // ── x402 EIP-712 Signing (IPC-bridged) ──
-
-  /**
-   * Sign EIP-712 typed data for x402 (transferWithAuthorization).
-   * Policy-enforced: the Wallet Isolate evaluates the payment amount before signing.
-   */
-  async x402Sign(request: {
-    domain: Record<string, unknown>;
-    types: Record<string, Array<{ name: string; type: string }>>;
-    message: Record<string, unknown>;
-    policyAmount: string;
-    policyRecipient: string;
-    policyChain: string;
-    policySymbol: string;
-  }): Promise<{ signature: string; approved: boolean; error?: string }> {
-    try {
-      const response = await this.send('x402_sign' as IPCRequest['type'], request as unknown as IPCRequest['payload'], 'x402');
-      const p = response.payload as unknown as { signature: string; approved: boolean; error?: string };
-      return p;
-    } catch (err) {
-      return { signature: '', approved: false, error: err instanceof Error ? err.message : 'x402 sign failed' };
-    }
-  }
-
-  /** Get the EVM wallet address for x402 client identity */
-  async x402GetAddress(): Promise<string> {
-    try {
-      const response = await this.send('x402_get_address' as IPCRequest['type'], {} as unknown as IPCRequest['payload']);
-      const p = response.payload as unknown as { address: string };
-      return p.address;
-    } catch {
-      return '';
     }
   }
 

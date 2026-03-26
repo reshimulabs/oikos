@@ -2,7 +2,7 @@
  * Oikos App — Entry Point
  *
  * Agent-agnostic wallet infrastructure. Spawns the wallet isolate,
- * starts all services (swarm, companion, events, pricing, RGB),
+ * starts all services (swarm, companion, events, RGB),
  * and serves MCP + REST + CLI for any agent to connect.
  *
  * No LLM. No brain. No plugin. Just infrastructure.
@@ -16,11 +16,10 @@ import { WalletIPCClient } from './ipc/client.js';
 import { loadOikosConfig } from './config/env.js';
 import { createDashboard } from './dashboard/server.js';
 import { EventBus } from './events/bus.js';
-import { PricingService } from './pricing/client.js';
 import { resolve, join } from 'path';
 import { homedir } from 'os';
 import { writeFileSync, existsSync, mkdirSync } from 'fs';
-import type { OikosServices, IdentityState, CompanionInstruction, SwarmInterface } from './types.js';
+import type { OikosServices, CompanionInstruction, SwarmInterface } from './types.js';
 import { createBrainAdapter } from './brain/adapter.js';
 import type { ChatMessage } from './brain/adapter.js';
 import { processActions } from './brain/actions.js';
@@ -56,21 +55,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // 3. Initialize pricing service
-  const pricing = new PricingService();
-  await pricing.initialize();
-
-  // Initial balance check
-  try {
-    const balances = await wallet.queryBalanceAll();
-    if (balances.length > 0) {
-      console.error(`[oikos] Balance: ${balances[0]?.formatted ?? 'unknown'}`);
-      const valuation = await pricing.valuatePortfolio(balances);
-      console.error(`[oikos] Portfolio: $${valuation.totalUsd.toFixed(2)} USD (${valuation.assets.length} assets)`);
-    }
-  } catch { /* wallet may not be ready */ }
-
-  // 4. Create EventBus + start event source
+  // 3. Create EventBus + start event source
   const eventBus = new EventBus();
 
   if (config.mockEvents) {
@@ -79,24 +64,6 @@ async function main(): Promise<void> {
     eventSource.onEvents((events) => eventBus.emit(events));
     eventSource.start();
     console.error('[oikos] Events: mock (90-second agent lifecycle)');
-  } else if (config.indexerApiKey) {
-    const ethAddress = await wallet.queryAddress('ethereum').then(r => r.address).catch(() => '');
-    const addresses: Record<string, string> = {};
-    if (ethAddress) {
-      addresses['ethereum'] = ethAddress;
-      addresses['sepolia'] = ethAddress;
-    }
-
-    const { IndexerEventSource } = await import('./events/indexer.js');
-    const indexerSource = new IndexerEventSource({
-      apiKey: config.indexerApiKey,
-      baseUrl: config.indexerBaseUrl,
-      pollIntervalMs: config.eventPollIntervalMs,
-      addresses,
-    });
-    indexerSource.onEvents((events) => eventBus.emit(events));
-    indexerSource.start();
-    console.error(`[oikos] Events: live (WDK Indexer, address: ${ethAddress.slice(0, 10)}...)`);
   } else {
     console.error('[oikos] No event source configured (set MOCK_EVENTS=true or INDEXER_API_KEY)');
   }
@@ -220,13 +187,13 @@ async function main(): Promise<void> {
         return policies;
       },
       getAddresses: async () => {
-        const chains: string[] = ['ethereum', 'bitcoin', 'polygon', 'arbitrum', 'spark'];
+        const chains: string[] = ['bitcoin', 'spark'];
         const results = await Promise.all(
           chains.map(chain => wallet.queryAddress(chain).then(r => ({ chain, address: r.address })).catch(() => null))
         );
         return results.filter((r): r is { chain: string; address: string } => r !== null && !!r.address);
       },
-      getPrices: () => pricing.getAllPrices(),
+      getPrices: async () => [],
       getStrategies: async () => {
         const { existsSync: ex, readdirSync: rd, readFileSync: rf } = await import('node:fs');
         const { join: j, dirname: dn } = await import('node:path');
@@ -302,104 +269,7 @@ async function main(): Promise<void> {
     console.error(`[oikos] Companion: listening for owner`);
   }
 
-  // 7. Bootstrap ERC-8004 identity (always-on, lazy registration when funded)
-  const identity: IdentityState = {
-    registered: false,
-    agentId: null,
-    walletSet: false,
-    agentURI: null,
-    registrationTxHash: null,
-  };
-
-  const { LazyRegistrar } = await import('./identity/lazy-register.js');
-
-  // Helper: bootstrap reputation bridge once identity is registered
-  let reputationBridge: import('./reputation/bridge.js').ReputationBridge | null = null;
-
-  const bootstrapBridge = async (): Promise<void> => {
-    if (reputationBridge || !identity.registered || !swarm) return;
-
-    const { ReputationBridge } = await import('./reputation/bridge.js');
-    const autoFeedback = process.env['AUTO_FEEDBACK_ENABLED'] !== 'false';
-
-    const peerLookup: import('./reputation/bridge.js').PeerLookup = {
-      getErc8004AgentId: (peerPubkey: string) => {
-        const state = swarm!.getState();
-        const peer = state.boardPeers.find((p: { pubkey: string }) => p.pubkey === peerPubkey);
-        return peer?.erc8004AgentId;
-      },
-      getPeerInfo: (peerPubkey: string) => {
-        const state = swarm!.getState();
-        return state.boardPeers.find((p: { pubkey: string }) => p.pubkey === peerPubkey);
-      },
-    };
-
-    let walletAddress = '';
-    try {
-      const addr = await wallet.queryAddress('ethereum');
-      walletAddress = addr.address;
-    } catch { /* ok */ }
-
-    reputationBridge = new ReputationBridge(wallet, {
-      registered: identity.registered,
-      agentId: identity.agentId ?? undefined,
-      walletAddress,
-    }, peerLookup, {
-      enabled: autoFeedback,
-      dashboardBaseUrl: `http://127.0.0.1:${config.dashboardPort}`,
-      rateLimit: 1,
-    });
-
-    swarm.onEvent((event) => {
-      if (event.kind === 'settlement_completed') {
-        void reputationBridge!.onSettlement(event);
-      }
-    });
-
-    console.error(`[erc8004] Reputation Bridge: ${autoFeedback ? 'active' : 'disabled'}`);
-  };
-
-  const registrar = new LazyRegistrar(wallet, identity, {
-    identityPath: config.identityPath,
-    dashboardPort: config.dashboardPort,
-    dashboardHost: config.dashboardHost,
-  }, {
-    onRegistered: (id) => {
-      // Propagate to swarm
-      if (id.agentId && swarm?.updateErc8004AgentId) {
-        swarm.updateErc8004AgentId(id.agentId);
-      }
-      // Bootstrap reputation bridge (deferred until identity exists)
-      void bootstrapBridge();
-    },
-  });
-
-  // Try loading persisted identity first
-  if (registrar.tryLoad()) {
-    // Already registered from a previous session
-    if (identity.agentId && swarm?.updateErc8004AgentId) {
-      swarm.updateErc8004AgentId(identity.agentId);
-    }
-    void bootstrapBridge();
-  } else {
-    // Try registering now (if funded), otherwise start watcher
-    const registered = await registrar.tryRegister();
-    if (!registered) {
-      registrar.startWatcher();
-
-      // Opportunistic trigger: try registering on any incoming transfer event
-      eventBus.onEvents((events) => {
-        if (identity.registered) return;
-        const hasIncoming = events.some((e) => {
-          const data = e.data as unknown as Record<string, unknown> | undefined;
-          return data?.['type'] === 'incoming_transfer';
-        });
-        if (hasIncoming) {
-          void registrar.tryRegister();
-        }
-      });
-    }
-  }
+  // 7. Identity will be replaced by RGB-A AgentCard in Step 4
 
   // 8. Start RGB transport bridge (if enabled)
   let rgbBridge: { stop: () => void } | null = null;
@@ -421,19 +291,7 @@ async function main(): Promise<void> {
   const chatMessages: ChatMessage[] = [];
   console.error(`[oikos] Brain: ${brain.name} adapter`);
 
-  // 10. x402 client (micropayments — buying services)
-  let x402Client: import('./x402/client.js').X402Client | null = null;
-  const x402Enabled = process.env['X402_ENABLED'] !== 'false'; // enabled by default
-  if (x402Enabled) {
-    const { X402Client } = await import('./x402/client.js');
-    x402Client = new X402Client(wallet);
-    await x402Client.init().catch(err => {
-      console.error('[x402] Client init warning:', err instanceof Error ? err.message : err);
-    });
-    console.error('[x402] Machine payments client enabled');
-  }
-
-  // 10b. Spark status (mock for now — wallet isolate handles real ops)
+  // 10. Spark status (mock for now — wallet isolate handles real ops)
   const sparkEnabled = process.env['SPARK_ENABLED'] === 'true';
   if (sparkEnabled) {
     console.error('[spark] Lightning wallet enabled');
@@ -449,18 +307,14 @@ async function main(): Promise<void> {
   // 11. Assemble services
   const services: OikosServices = {
     wallet,
-    pricing,
     swarm: swarm as unknown as SwarmInterface | null,
     eventBus,
-    identity,
     companionConnected: companion?.isConnected() ?? false,
     instructions,
     brain,
     chatMessages,
-    x402: x402Client,
     sparkEnabled,
     auth,
-    reputationBridge,
     companion: companion ?? null,
   };
 

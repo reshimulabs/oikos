@@ -3,7 +3,7 @@
  *
  * Flow: evaluate policy -> if approved -> execute operation -> log result
  *
- * Handles all proposal types: payment, swap, bridge, yield.
+ * Handles all proposal types: payment, rgb_issue, rgb_transfer.
  *
  * @security This is the most critical module in the entire system.
  * A rejected proposal MUST NEVER result in a signed transaction.

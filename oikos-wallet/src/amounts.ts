@@ -11,10 +11,7 @@ import type { TokenSymbol } from './ipc/types.js';
 /** Token decimal places — must match wallet-isolate/src/wallet/manager.ts */
 const DECIMALS: Record<TokenSymbol, number> = {
   USDT: 6,
-  XAUT: 6,
-  USAT: 6,
   BTC: 8,
-  ETH: 18,
   RGB: 6,
 };
 

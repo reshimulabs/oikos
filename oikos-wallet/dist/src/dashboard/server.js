@@ -24,7 +24,6 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync, unlink
 import { mountMCP, mountRemoteMCP } from '../mcp/server.js';
 import { buildWalletContext } from '../brain/adapter.js';
 import { processActions } from '../brain/actions.js';
-import { getFeedbackFile, listFeedbackIds } from '../reputation/feedback-file.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 export function createDashboard(services, port, host = '127.0.0.1') {
@@ -106,7 +105,6 @@ export function createDashboard(services, port, host = '127.0.0.1') {
                 proposalsSent: entries.length,
                 proposalsApproved: entries.filter((e) => e['status'] === 'executed').length,
                 proposalsRejected: entries.filter((e) => e['status'] === 'rejected').length,
-                defiOps: entries.filter((e) => ['swap', 'bridge', 'yield'].includes(String(e['proposalType'] ?? ''))).length,
                 lastReasoning: 'Connect an agent via MCP to see reasoning.',
                 lastDecision: '--',
             });
@@ -128,7 +126,7 @@ export function createDashboard(services, port, host = '127.0.0.1') {
     /** Wallet addresses — all supported chains */
     app.get('/api/addresses', async (_req, res) => {
         try {
-            const chains = ['ethereum', 'bitcoin', 'polygon', 'arbitrum', 'spark'];
+            const chains = ['bitcoin', 'rgb', 'spark'];
             const results = await Promise.all(chains.map(chain => wallet.queryAddress(chain).catch(() => null)));
             res.json({ addresses: results.filter(Boolean) });
         }
@@ -475,124 +473,24 @@ export function createDashboard(services, port, host = '127.0.0.1') {
             res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
         }
     });
-    // ── ERC-8004 Identity & Reputation ──
+    // ── Agent Card ──
     app.get('/agent-card.json', (_req, res) => {
         const swarmState = services.swarm?.getState();
         const swarmIdentity = swarmState?.['identity'];
         const swarmPubkey = swarmIdentity?.['pubkey'];
         const swarmCapabilities = (swarmIdentity?.['capabilities'] ?? []);
         res.json({
-            type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
             name: process.env['AGENT_NAME'] || 'Oikos Agent',
-            description: process.env['AGENT_DESCRIPTION'] || 'Autonomous AI agent with process-isolated multi-chain wallet on Tether runtime stack.',
+            description: process.env['AGENT_DESCRIPTION'] || 'Autonomous AI agent with process-isolated Bitcoin/RGB wallet on Tether runtime stack.',
             image: process.env['AGENT_IMAGE'] || null,
             services: [
                 { name: 'MCP', endpoint: `http://127.0.0.1:${port}/mcp`, version: '2025-06-18' },
                 { name: 'web', endpoint: `http://127.0.0.1:${port}/` },
                 ...(swarmPubkey ? [{ name: 'hyperswarm', endpoint: `noise://${swarmPubkey}`, version: '1.0' }] : []),
             ],
-            x402Support: true,
             active: true,
-            registrations: services.identity.agentId
-                ? [{ agentId: Number(services.identity.agentId), agentRegistry: 'eip155:11155111:0x8004A818BFB912233c491871b3d84c89A494BD9e' }]
-                : [],
-            supportedTrust: ['reputation'],
             capabilities: swarmCapabilities,
         });
-    });
-    app.get('/.well-known/agent-registration.json', (_req, res) => {
-        if (!services.identity.registered || !services.identity.agentId) {
-            res.status(404).json({ error: 'Agent not registered on ERC-8004' });
-            return;
-        }
-        res.json({
-            agentId: Number(services.identity.agentId),
-            agentRegistry: 'eip155:11155111:0x8004A818BFB912233c491871b3d84c89A494BD9e',
-            agentURI: services.identity.agentURI,
-        });
-    });
-    app.get('/api/identity', (_req, res) => {
-        res.json(services.identity);
-    });
-    app.get('/api/reputation/onchain', async (_req, res) => {
-        if (!services.identity.registered || !services.identity.agentId) {
-            res.json({ registered: false });
-            return;
-        }
-        try {
-            const tag1 = _req.query['tag1'];
-            const tag2 = _req.query['tag2'];
-            const rep = await wallet.queryReputation(services.identity.agentId, 'ethereum', { tag1: tag1 || undefined, tag2: tag2 || undefined });
-            res.json({ registered: true, ...rep });
-        }
-        catch {
-            res.status(500).json({ error: 'Failed to query on-chain reputation' });
-        }
-    });
-    // ── Feedback File Hosting (ERC-8004 off-chain evidence) ──
-    /** Serve off-chain ERC-8004 feedback detail files */
-    app.get('/api/feedback/:feedbackId', (_req, res) => {
-        const file = getFeedbackFile(_req.params['feedbackId']);
-        if (!file) {
-            res.status(404).json({ error: 'Feedback file not found' });
-            return;
-        }
-        res.json(file);
-    });
-    /** List all feedback file IDs */
-    app.get('/api/feedback', (_req, res) => {
-        res.json({ feedbackIds: listFeedbackIds() });
-    });
-    // ── Reputation Bridge Stats ──
-    app.get('/api/reputation/bridge', (_req, res) => {
-        if (!services.reputationBridge) {
-            res.json({ enabled: false });
-            return;
-        }
-        res.json(services.reputationBridge.getStats());
-    });
-    // ── Pricing & Portfolio Valuation ──
-    app.get('/api/prices', async (_req, res) => {
-        if (!services.pricing) {
-            res.json({ source: 'unavailable', prices: [] });
-            return;
-        }
-        try {
-            const prices = await services.pricing.getAllPrices();
-            res.json({ prices });
-        }
-        catch {
-            res.status(500).json({ error: 'Failed to fetch prices' });
-        }
-    });
-    app.get('/api/valuation', async (_req, res) => {
-        try {
-            const balances = await wallet.queryBalanceAll();
-            if (services.pricing) {
-                const valuation = await services.pricing.valuatePortfolio(balances);
-                res.json(valuation);
-            }
-            else {
-                res.json({ totalUsd: 0, assets: [], prices: [], updatedAt: Date.now() });
-            }
-        }
-        catch {
-            res.status(500).json({ error: 'Failed to compute valuation' });
-        }
-    });
-    app.get('/api/prices/history/:symbol', async (req, res) => {
-        if (!services.pricing) {
-            res.json({ symbol: req.params['symbol'], history: [] });
-            return;
-        }
-        const symbol = (req.params['symbol'] ?? '').toUpperCase();
-        try {
-            const history = await services.pricing.getHistoricalPrices(symbol);
-            res.json({ symbol, history });
-        }
-        catch {
-            res.status(500).json({ error: `Failed to fetch history for ${symbol}` });
-        }
     });
     // ── Dry-Run Policy Check ──
     app.post('/api/simulate', async (req, res) => {
@@ -601,7 +499,7 @@ export function createDashboard(services, port, host = '127.0.0.1') {
             const proposal = {
                 amount: String(body['amount'] ?? '0'),
                 symbol: String(body['symbol'] ?? 'USDT'),
-                chain: String(body['chain'] ?? 'ethereum'),
+                chain: String(body['chain'] ?? 'bitcoin'),
                 reason: String(body['reason'] ?? 'dry-run'),
                 confidence: Number(body['confidence'] ?? 0.85),
                 strategy: String(body['strategy'] ?? 'simulate'),
@@ -651,7 +549,6 @@ export function createDashboard(services, port, host = '127.0.0.1') {
                 events: services.eventBus?.getRecent(20) ?? [],
                 instructions: services.instructions.slice(-20),
                 companionConnected: services.companionConnected,
-                identity: services.identity,
                 walletConnected: wallet.isRunning(),
             });
         }
@@ -690,21 +587,8 @@ export function createDashboard(services, port, host = '127.0.0.1') {
                     to: String(body['to'] ?? ''),
                     amount: String(body['amount'] ?? '0'),
                     symbol: String(body['symbol'] ?? 'USDT'),
-                    chain: String(body['chain'] ?? 'ethereum'),
+                    chain: String(body['chain'] ?? 'bitcoin'),
                     reason: String(body['reason'] ?? 'companion'),
-                    confidence: 0.9,
-                    strategy: 'companion',
-                    timestamp: Date.now(),
-                });
-                res.json(result);
-            }
-            else if (type === 'swap') {
-                const result = await wallet.proposeSwap({
-                    symbol: String(body['symbol'] ?? 'USDT'),
-                    toSymbol: String(body['toSymbol'] ?? 'XAUT'),
-                    amount: String(body['amount'] ?? '0'),
-                    chain: String(body['chain'] ?? 'ethereum'),
-                    reason: String(body['reason'] ?? 'companion swap'),
                     confidence: 0.9,
                     strategy: 'companion',
                     timestamp: Date.now(),
@@ -1027,22 +911,6 @@ catch(e){r.textContent='Error: '+e.message;r.style.color='#f87171'}}</script></b
                 res.status(404).send('Board page not found');
         });
     });
-    // -- x402 Resource Server (sell services behind 402 paywall) --
-    const x402ServerEnabled = process.env['X402_SERVER_ENABLED'] !== 'false';
-    if (x402ServerEnabled) {
-        const x402Economics = services.x402?.getEconomicsRef?.() ?? undefined;
-        import('../x402/server.js').then(({ mountX402Server, mountX402Discovery, DEFAULT_ROUTES }) => {
-            mountX402Server(app, wallet, DEFAULT_ROUTES, x402Economics).then(result => {
-                if (result.mounted) {
-                    mountX402Discovery(app, DEFAULT_ROUTES ?? [], result.payToAddress);
-                }
-            }).catch(err => {
-                console.error('[x402-server] Mount failed:', err instanceof Error ? err.message : err);
-            });
-        }).catch(() => {
-            console.error('[x402-server] Module not available');
-        });
-    }
     app.listen(port, host, () => {
         console.error(`[dashboard] Listening on http://${host}:${port}`);
         if (host === '0.0.0.0') {

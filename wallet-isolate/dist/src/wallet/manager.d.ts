@@ -9,14 +9,20 @@
  * This module NEVER logs, returns, or exposes the seed in any way.
  */
 import type { Chain, TokenSymbol } from '../ipc/types.js';
-import type { ChainConfig, WalletBalance, TransactionResult, WalletOperations, IdentityOperationResult, OnChainReputation } from './types.js';
+import type { ChainConfig, WalletBalance, TransactionResult, WalletOperations } from './types.js';
+/**
+ * WDK Wallet Manager — real implementation using @tetherto/wdk.
+ *
+ * Initializes WDK with the seed phrase and registers chain wallets.
+ * Provides getAddress, getBalance, sendTransaction for BTC + Spark.
+ * RGB operations are stubbed until wdk-wallet-rgb is wired (Step 2).
+ */
 export declare class WalletManager implements WalletOperations {
     private wdk;
     private sparkManager;
     private sparkAccount;
     private sparkAddress;
     private initialized;
-    private rpcUrls;
     /**
      * Initialize the wallet.
      * @security Seed is consumed here and NEVER stored or exposed.
@@ -30,90 +36,6 @@ export declare class WalletManager implements WalletOperations {
      * This must only be called from ProposalExecutor after policy approval.
      */
     sendTransaction(chain: Chain, to: string, amount: bigint, symbol: TokenSymbol): Promise<TransactionResult>;
-    /**
-     * Swap tokens via Velora DEX protocol.
-     * Requires @tetherto/wdk-protocol-swap-velora-evm.
-     * Note: Velora API only supports mainnet chains — Sepolia swaps will fail.
-     */
-    swap(chain: Chain, fromSymbol: TokenSymbol, toSymbol: TokenSymbol, fromAmount: bigint): Promise<TransactionResult>;
-    /**
-     * Bridge tokens cross-chain via USDT0 protocol.
-     * Requires @tetherto/wdk-protocol-bridge-usdt0-evm.
-     * Note: USDT0 is not deployed on Sepolia — bridge requires mainnet chains.
-     */
-    bridge(fromChain: Chain, toChain: Chain, symbol: TokenSymbol, amount: bigint): Promise<TransactionResult>;
-    /**
-     * Deposit tokens into Aave lending pool.
-     * Tries WDK protocol module first; falls back to direct Aave V3 Pool
-     * contract calls on Sepolia (WDK module is mainnet-only).
-     */
-    deposit(chain: Chain, symbol: TokenSymbol, amount: bigint, _protocol: string): Promise<TransactionResult>;
-    /**
-     * Withdraw tokens from Aave lending pool.
-     * Tries WDK protocol module first; falls back to direct Aave V3 Pool
-     * contract calls on Sepolia (WDK module is mainnet-only).
-     */
-    withdraw(chain: Chain, symbol: TokenSymbol, amount: bigint, _protocol: string): Promise<TransactionResult>;
-    /**
-     * Register an on-chain ERC-8004 identity by calling IdentityRegistry.register(agentURI).
-     * Mints an ERC-721 NFT. Parses the Transfer event to extract the agentId.
-     */
-    registerIdentity(chain: Chain, agentURI: string): Promise<IdentityOperationResult>;
-    /**
-     * Set the agent's wallet address on the IdentityRegistry.
-     * Requires EIP-712 signing via WDK's signer.
-     *
-     * The agent's EOA is both the NFT owner and the wallet being set,
-     * so it signs the EIP-712 data with its own key and sends the tx.
-     */
-    setAgentWallet(chain: Chain, agentId: string, deadline: number): Promise<IdentityOperationResult>;
-    /**
-     * Submit on-chain reputation feedback to the ReputationRegistry.
-     */
-    giveFeedback(chain: Chain, targetAgentId: string, value: number, valueDecimals: number, tag1: string, tag2: string, endpoint: string, feedbackURI: string, feedbackHash: string): Promise<TransactionResult>;
-    /**
-     * Query on-chain reputation from the ReputationRegistry via eth_call.
-     * This is a read-only call (no gas, no tx).
-     */
-    getOnChainReputation(chain: Chain, agentId: string, opts?: {
-        clients?: string[];
-        tag1?: string;
-        tag2?: string;
-    }): Promise<OnChainReputation>;
-    /**
-     * Read a single feedback entry from the ReputationRegistry.
-     * View call (no gas).
-     */
-    readFeedback(chain: Chain, agentId: string, clientAddress: string, feedbackIndex: number): Promise<{
-        value: number;
-        valueDecimals: number;
-        isRevoked: boolean;
-    }>;
-    /**
-     * Get all addresses that have given feedback for an agent.
-     * View call (no gas).
-     */
-    getClients(chain: Chain, agentId: string): Promise<string[]>;
-    /**
-     * Get the last feedback index for a specific client-agent pair.
-     * View call (no gas).
-     */
-    getLastIndex(chain: Chain, agentId: string, clientAddress: string): Promise<number>;
-    /**
-     * Append a response to feedback (agent defends its reputation).
-     * Transaction — costs gas.
-     */
-    appendResponse(chain: Chain, agentId: string, clientAddress: string, feedbackIndex: number, responseURI: string, responseHash: string): Promise<TransactionResult>;
-    /**
-     * Set metadata on the IdentityRegistry (extensible key-value store).
-     * Transaction — costs gas.
-     */
-    setIdentityMetadata(chain: Chain, agentId: string, key: string, valueHex: string): Promise<TransactionResult>;
-    /**
-     * Get metadata from the IdentityRegistry.
-     * View call (no gas).
-     */
-    getIdentityMetadata(chain: Chain, agentId: string, key: string): Promise<string>;
     rgbIssueAsset(_ticker: string, _name: string, _supply: bigint, _precision: number): Promise<TransactionResult & {
         assetId?: string;
     }>;
@@ -141,28 +63,8 @@ export declare class WalletManager implements WalletOperations {
     sparkGetDepositAddress(): Promise<string>;
     /** Get Spark transfer history. */
     sparkGetTransfers(direction?: 'incoming' | 'outgoing' | 'all', limit?: number): Promise<unknown[]>;
-    /** Get the Spark account (cached at init time for performance). */
     private getSparkAccount;
-    /**
-     * Sign EIP-712 typed data using the EVM wallet account.
-     * Used by x402 for EIP-3009 transferWithAuthorization.
-     * @security Only called after PolicyEngine approval in wallet-isolate main.
-     */
-    signTypedData(typedData: {
-        domain: Record<string, unknown>;
-        types: Record<string, Array<{
-            name: string;
-            type: string;
-        }>>;
-        message: Record<string, unknown>;
-    }): Promise<string>;
-    /** Get the WDK account for a given chain (may be read-only — fine for queries). */
     private getAccount;
-    /**
-     * Make a raw JSON-RPC eth_call to a contract (read-only, no gas).
-     * Used for ERC-8004 reputation queries.
-     */
-    private ethCall;
     private ensureInitialized;
 }
 /**
@@ -172,9 +74,6 @@ export declare class WalletManager implements WalletOperations {
 export declare class MockWalletManager implements WalletOperations {
     private balances;
     private initialized;
-    private nextAgentId;
-    private feedbackStore;
-    private nextFeedbackIndex;
     private mockRgbAssets;
     private nextRgbAssetId;
     initialize(_seed: string, chains: ChainConfig[]): Promise<void>;
@@ -189,28 +88,6 @@ export declare class MockWalletManager implements WalletOperations {
     getBalance(chain: Chain, symbol: TokenSymbol): Promise<WalletBalance>;
     getBalances(): Promise<WalletBalance[]>;
     sendTransaction(chain: Chain, _to: string, amount: bigint, symbol: TokenSymbol): Promise<TransactionResult>;
-    swap(chain: Chain, fromSymbol: TokenSymbol, toSymbol: TokenSymbol, fromAmount: bigint): Promise<TransactionResult>;
-    bridge(fromChain: Chain, toChain: Chain, symbol: TokenSymbol, amount: bigint): Promise<TransactionResult>;
-    deposit(chain: Chain, symbol: TokenSymbol, amount: bigint, _protocol: string): Promise<TransactionResult>;
-    withdraw(chain: Chain, symbol: TokenSymbol, amount: bigint, _protocol: string): Promise<TransactionResult>;
-    registerIdentity(_chain: Chain, _agentURI: string): Promise<IdentityOperationResult>;
-    setAgentWallet(_chain: Chain, _agentId: string, _deadline: number): Promise<IdentityOperationResult>;
-    giveFeedback(_chain: Chain, targetAgentId: string, value: number, valueDecimals: number, _tag1: string, _tag2: string, _endpoint: string, _feedbackURI: string, _feedbackHash: string): Promise<TransactionResult>;
-    getOnChainReputation(_chain: Chain, agentId: string, _opts?: {
-        clients?: string[];
-        tag1?: string;
-        tag2?: string;
-    }): Promise<OnChainReputation>;
-    readFeedback(_chain: Chain, agentId: string, clientAddress: string, feedbackIndex: number): Promise<{
-        value: number;
-        valueDecimals: number;
-        isRevoked: boolean;
-    }>;
-    getClients(_chain: Chain, agentId: string): Promise<string[]>;
-    getLastIndex(_chain: Chain, agentId: string, clientAddress: string): Promise<number>;
-    appendResponse(_chain: Chain, _agentId: string, _clientAddress: string, _feedbackIndex: number, _responseURI: string, _responseHash: string): Promise<TransactionResult>;
-    setIdentityMetadata(_chain: Chain, _agentId: string, _key: string, _valueHex: string): Promise<TransactionResult>;
-    getIdentityMetadata(_chain: Chain, _agentId: string, _key: string): Promise<string>;
     rgbIssueAsset(ticker: string, name: string, supply: bigint, precision: number): Promise<TransactionResult & {
         assetId?: string;
     }>;

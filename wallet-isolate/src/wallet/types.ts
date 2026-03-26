@@ -9,7 +9,7 @@ import type { Chain, TokenSymbol } from '../ipc/types.js';
 
 export interface ChainConfig {
   chain: Chain;
-  provider?: string;     // RPC URL for EVM chains
+  provider?: string;     // RPC URL (unused after EVM removal, kept for future)
   network?: string;      // 'testnet' | 'mainnet' for BTC, 'MAINNET' | 'SIGNET' | 'REGTEST' for Spark
   host?: string;         // Electrum host for BTC
   port?: number;         // Electrum port for BTC
@@ -32,21 +32,6 @@ export interface TransactionResult {
   error?: string;
 }
 
-/** Result of an ERC-8004 identity lifecycle operation. */
-export interface IdentityOperationResult {
-  success: boolean;
-  txHash?: string;
-  agentId?: string;
-  error?: string;
-}
-
-/** On-chain reputation data from ERC-8004 ReputationRegistry. */
-export interface OnChainReputation {
-  feedbackCount: number;
-  totalValue: string;
-  valueDecimals: number;
-}
-
 export interface WalletOperations {
   /** Initialize the wallet with a seed phrase and register chains. */
   initialize(seed: string, chains: ChainConfig[]): Promise<void>;
@@ -65,55 +50,6 @@ export interface WalletOperations {
    * @security This is the code path that moves funds for payments.
    */
   sendTransaction(chain: Chain, to: string, amount: bigint, symbol: TokenSymbol): Promise<TransactionResult>;
-
-  /** Swap between token pairs on the same chain. */
-  swap(chain: Chain, fromSymbol: TokenSymbol, toSymbol: TokenSymbol, fromAmount: bigint): Promise<TransactionResult>;
-
-  /** Bridge tokens cross-chain. */
-  bridge(fromChain: Chain, toChain: Chain, symbol: TokenSymbol, amount: bigint): Promise<TransactionResult>;
-
-  /** Deposit tokens into a yield protocol. */
-  deposit(chain: Chain, symbol: TokenSymbol, amount: bigint, protocol: string): Promise<TransactionResult>;
-
-  /** Withdraw tokens from a yield protocol. */
-  withdraw(chain: Chain, symbol: TokenSymbol, amount: bigint, protocol: string): Promise<TransactionResult>;
-
-  // ── ERC-8004 Identity & Reputation ──
-
-  /** Register an on-chain ERC-8004 identity (mints ERC-721 NFT). */
-  registerIdentity(chain: Chain, agentURI: string): Promise<IdentityOperationResult>;
-
-  /** Set the agent's wallet address on the IdentityRegistry (EIP-712 signed). */
-  setAgentWallet(chain: Chain, agentId: string, deadline: number): Promise<IdentityOperationResult>;
-
-  /** Submit on-chain reputation feedback for a peer agent. */
-  giveFeedback(
-    chain: Chain, targetAgentId: string, value: number, valueDecimals: number,
-    tag1: string, tag2: string, endpoint: string, feedbackURI: string, feedbackHash: string
-  ): Promise<TransactionResult>;
-
-  /** Query on-chain reputation from ERC-8004 ReputationRegistry. */
-  getOnChainReputation(chain: Chain, agentId: string, opts?: { clients?: string[]; tag1?: string; tag2?: string }): Promise<OnChainReputation>;
-
-  // ── ERC-8004 Read Operations ──
-
-  /** Read a single feedback entry. */
-  readFeedback(chain: Chain, agentId: string, clientAddress: string, feedbackIndex: number): Promise<{ value: number; valueDecimals: number; isRevoked: boolean }>;
-
-  /** Get all addresses that have given feedback for an agent. */
-  getClients(chain: Chain, agentId: string): Promise<string[]>;
-
-  /** Get the last feedback index for a client-agent pair. */
-  getLastIndex(chain: Chain, agentId: string, clientAddress: string): Promise<number>;
-
-  /** Append a response to feedback (agent defends reputation). */
-  appendResponse(chain: Chain, agentId: string, clientAddress: string, feedbackIndex: number, responseURI: string, responseHash: string): Promise<TransactionResult>;
-
-  /** Set metadata on the IdentityRegistry. */
-  setIdentityMetadata(chain: Chain, agentId: string, key: string, valueHex: string): Promise<TransactionResult>;
-
-  /** Get metadata from the IdentityRegistry. */
-  getIdentityMetadata(chain: Chain, agentId: string, key: string): Promise<string>;
 
   // ── RGB Asset Operations ──
 

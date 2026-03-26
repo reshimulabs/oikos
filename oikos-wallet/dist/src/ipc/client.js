@@ -95,39 +95,13 @@ export class WalletIPCClient {
         const response = await this.send('propose_payment', proposal, source);
         return response.payload;
     }
-    /** Propose a token swap (e.g., USDT → XAUT) */
-    async proposeSwap(proposal, source) {
-        const response = await this.send('propose_swap', proposal, source);
-        return response.payload;
-    }
-    /** Propose a cross-chain bridge (e.g., Ethereum → Arbitrum) */
-    async proposeBridge(proposal, source) {
-        const response = await this.send('propose_bridge', proposal, source);
-        return response.payload;
-    }
-    /** Propose a yield deposit or withdrawal */
-    async proposeYield(proposal, source) {
-        const response = await this.send('propose_yield', proposal, source);
-        return response.payload;
-    }
     /**
      * Universal entry point for external proposal sources.
      * Routes to the appropriate propose method with source attribution.
-     * Used by x402 client, companion channel, and swarm negotiation.
+     * Used by companion channel and swarm negotiation.
      */
-    async proposalFromExternal(source, type, proposal) {
-        switch (type) {
-            case 'payment':
-                return this.proposePayment(proposal, source);
-            case 'swap':
-                return this.proposeSwap(proposal, source);
-            case 'bridge':
-                return this.proposeBridge(proposal, source);
-            case 'yield':
-                return this.proposeYield(proposal, source);
-            case 'feedback':
-                return this.proposeFeedback(proposal, source);
-        }
+    async proposalFromExternal(source, _type, proposal) {
+        return this.proposePayment(proposal, source);
     }
     // ── Query API ──
     /** Query balance for a specific chain and token */
@@ -159,30 +133,6 @@ export class WalletIPCClient {
         const response = await this.send('query_audit', query);
         const payload = response.payload;
         return payload.entries;
-    }
-    // ── ERC-8004 Identity & Reputation ──
-    /** Register an on-chain ERC-8004 identity (mints ERC-721 NFT). */
-    async registerIdentity(agentURI, chain = 'ethereum') {
-        const payload = { agentURI, chain };
-        const response = await this.send('identity_register', payload);
-        return response.payload;
-    }
-    /** Set the agent's wallet address on the IdentityRegistry (EIP-712 signed). */
-    async setAgentWallet(agentId, deadline, chain = 'ethereum') {
-        const payload = { agentId, deadline, chain };
-        const response = await this.send('identity_set_wallet', payload);
-        return response.payload;
-    }
-    /** Submit on-chain reputation feedback for a peer agent. */
-    async proposeFeedback(proposal, source) {
-        const response = await this.send('propose_feedback', proposal, source);
-        return response.payload;
-    }
-    /** Query on-chain reputation from ERC-8004 ReputationRegistry. */
-    async queryReputation(agentId, chain = 'ethereum', opts) {
-        const payload = { agentId, chain, ...opts };
-        const response = await this.send('query_reputation', payload);
-        return response.payload;
     }
     // ── Dry-Run Policy Check ──
     /** Simulate a proposal against the policy engine without executing or burning cooldown. */
@@ -296,32 +246,6 @@ export class WalletIPCClient {
         }
         catch {
             return [];
-        }
-    }
-    // ── x402 EIP-712 Signing (IPC-bridged) ──
-    /**
-     * Sign EIP-712 typed data for x402 (transferWithAuthorization).
-     * Policy-enforced: the Wallet Isolate evaluates the payment amount before signing.
-     */
-    async x402Sign(request) {
-        try {
-            const response = await this.send('x402_sign', request, 'x402');
-            const p = response.payload;
-            return p;
-        }
-        catch (err) {
-            return { signature: '', approved: false, error: err instanceof Error ? err.message : 'x402 sign failed' };
-        }
-    }
-    /** Get the EVM wallet address for x402 client identity */
-    async x402GetAddress() {
-        try {
-            const response = await this.send('x402_get_address', {});
-            const p = response.payload;
-            return p.address;
-        }
-        catch {
-            return '';
         }
     }
     // ── Internal ──

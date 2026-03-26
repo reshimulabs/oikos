@@ -7,9 +7,6 @@
  *   oikos balance USDT                     Filter by symbol
  *   oikos address [chain]                  Wallet addresses
  *   oikos pay <amt> <sym> to <addr>        Send tokens
- *   oikos swap <amt> <sym> to <toSym>      Swap tokens
- *   oikos bridge <amt> <sym> from <fc> to <tc>  Bridge cross-chain
- *   oikos yield deposit|withdraw <amt> <sym>    Yield ops
  *   oikos status                           Policy budgets
  *   oikos audit [--limit N]                Transaction history
  *   oikos health                           Gateway health
@@ -20,8 +17,6 @@
  *   oikos bid <id> <price> [sym]           Bid on announcement
  *   oikos accept <id>                      Accept best bid (creator)
  *   oikos settle <id>                      Submit payment (creator)
- *   oikos identity                         ERC-8004 identity
- *   oikos prices                           Asset prices
  *   oikos rgb assets                       RGB assets
  *   oikos rgb issue <t> <n> <s>            Issue RGB asset
  *   oikos rgb transfer <inv> <amt>         Transfer RGB asset
@@ -51,7 +46,6 @@ const port = flag('port') ?? '3420';
 const jsonOutput = hasFlag('json');
 const reason = flag('reason') ?? 'CLI operation';
 const confidence = parseFloat(flag('confidence') ?? '0.85');
-const protocol = flag('protocol') ?? 'aave-v3';
 const limit = flag('limit') ?? '20';
 const BASE = `http://127.0.0.1:${port}`;
 const cmd = argv[0] ?? '';
@@ -351,68 +345,7 @@ async function cmdPay() {
         process.exit(1);
     }
     const result = await mcpCall('propose_payment', {
-        amount, symbol, chain: 'ethereum', to, reason, confidence,
-    });
-    if (jsonOutput) {
-        out(result);
-    }
-    else {
-        formatResult(result);
-    }
-}
-async function cmdSwap() {
-    // oikos swap 5 USDT to XAUT
-    const amount = argv[1];
-    const symbol = argv[2]?.toUpperCase();
-    const toIdx = argv.indexOf('to');
-    const toSymbol = toIdx !== -1 ? argv[toIdx + 1]?.toUpperCase() : undefined;
-    if (!amount || !symbol || !toSymbol) {
-        console.error(`${RED}Usage: oikos swap <amount> <symbol> to <toSymbol> [--reason "..."]${RESET}`);
-        process.exit(1);
-    }
-    const result = await mcpCall('propose_swap', {
-        amount, symbol, toSymbol, chain: 'ethereum', reason, confidence,
-    });
-    if (jsonOutput) {
-        out(result);
-    }
-    else {
-        formatResult(result);
-    }
-}
-async function cmdBridge() {
-    // oikos bridge 1 USDT from ethereum to arbitrum
-    const amount = argv[1];
-    const symbol = argv[2]?.toUpperCase();
-    const fromIdx = argv.indexOf('from');
-    const toIdx = argv.indexOf('to');
-    const fromChain = fromIdx !== -1 ? argv[fromIdx + 1]?.toLowerCase() : undefined;
-    const toChain = toIdx !== -1 ? argv[toIdx + 1]?.toLowerCase() : undefined;
-    if (!amount || !symbol || !fromChain || !toChain) {
-        console.error(`${RED}Usage: oikos bridge <amount> <symbol> from <chain> to <chain> [--reason "..."]${RESET}`);
-        process.exit(1);
-    }
-    const result = await mcpCall('propose_bridge', {
-        amount, symbol, fromChain, toChain, reason, confidence,
-    });
-    if (jsonOutput) {
-        out(result);
-    }
-    else {
-        formatResult(result);
-    }
-}
-async function cmdYield() {
-    // oikos yield deposit 2 USDT
-    const action = argv[1];
-    const amount = argv[2];
-    const symbol = argv[3]?.toUpperCase();
-    if (!action || !amount || !symbol || !['deposit', 'withdraw'].includes(action)) {
-        console.error(`${RED}Usage: oikos yield <deposit|withdraw> <amount> <symbol> [--protocol aave-v3]${RESET}`);
-        process.exit(1);
-    }
-    const result = await mcpCall('propose_yield', {
-        amount, symbol, chain: 'ethereum', protocol, action, reason, confidence,
+        amount, symbol, chain: 'bitcoin', to, reason, confidence,
     });
     if (jsonOutput) {
         out(result);
@@ -614,29 +547,6 @@ async function cmdSettle() {
         out(result);
     }
 }
-async function cmdIdentity() {
-    const data = await get('/api/identity');
-    out(data);
-}
-async function cmdPrices() {
-    const data = await get('/api/prices');
-    if (jsonOutput) {
-        out(data);
-        return;
-    }
-    const prices = data.prices ?? [];
-    if (prices.length === 0) {
-        console.log(`${DIM}No prices available.${RESET}`);
-        return;
-    }
-    console.log(`${BOLD}Symbol   Price (USD)      Source${RESET}`);
-    console.log('─'.repeat(42));
-    for (const p of prices) {
-        const sym = p.symbol.padEnd(8);
-        const price = `$${p.priceUsd.toLocaleString()}`.padEnd(16);
-        console.log(`${CYAN}${sym}${RESET} ${price} ${DIM}${p.source}${RESET}`);
-    }
-}
 // ── RGB Commands ──
 async function cmdRgb() {
     const sub = argv[1];
@@ -716,14 +626,13 @@ async function cmdSimulate() {
     const simType = argv[1] ?? '';
     const simAmount = argv[2] ?? '1';
     const simSymbol = argv[3] ?? 'USDT';
-    const simChain = flag('--chain') ?? 'ethereum';
+    const simChain = flag('--chain') ?? 'bitcoin';
     const simTo = flag('--to') ?? '';
     const simToSymbol = flag('--toSymbol') ?? '';
-    if (!['payment', 'swap', 'bridge', 'yield'].includes(simType)) {
-        console.error(`${RED}Usage: oikos simulate <payment|swap|bridge|yield> <amount> <symbol>${RESET}`);
-        console.error(`  --chain ethereum   Chain (default: ethereum)`);
-        console.error(`  --to 0x...         Recipient (for payment)`);
-        console.error(`  --toSymbol XAUT    Target symbol (for swap)`);
+    if (!['payment'].includes(simType)) {
+        console.error(`${RED}Usage: oikos simulate <payment> <amount> <symbol>${RESET}`);
+        console.error(`  --chain bitcoin    Chain (default: bitcoin)`);
+        console.error(`  --to bc1...        Recipient (for payment)`);
         process.exit(1);
     }
     const body = {
@@ -826,29 +735,24 @@ ${BOLD}Read:${RESET}
   oikos audit [--limit N]                Transaction history
   oikos health                           Service health
   oikos swarm                            P2P swarm state
-  oikos identity                         ERC-8004 identity
-  oikos prices                           Asset prices
 
 ${BOLD}Write:${RESET}
   oikos pay <amt> <sym> to <addr>        Send tokens
-  oikos swap <amt> <sym> to <toSym>      Swap tokens
-  oikos bridge <amt> <sym> from <c> to <c>  Bridge cross-chain
-  oikos yield deposit|withdraw <amt> <sym>  Yield ops
 
 ${BOLD}Swarm:${RESET}
-  oikos board                              Announcement board
-  oikos rooms                             Active negotiation rooms
-  oikos announce <cat> "<t>" "<d>"        Post announcement
-  oikos bid <id> <price> [sym]            Bid on announcement
-  oikos accept <id>                       Accept best bid (creator)
-  oikos settle <id>                       Submit payment (creator)
+  oikos board                            Announcement board
+  oikos rooms                            Active negotiation rooms
+  oikos announce <cat> "<t>" "<d>"       Post announcement
+  oikos bid <id> <price> [sym]           Bid on announcement
+  oikos accept <id>                      Accept best bid (creator)
+  oikos settle <id>                      Submit payment (creator)
 
 ${BOLD}Chat:${RESET}
   oikos chat "message"                   Send one message to brain
   oikos chat                             Interactive chat mode
 
 ${BOLD}Simulate:${RESET}
-  oikos simulate <type> <amt> <sym>      Dry-run policy check
+  oikos simulate payment <amt> <sym>     Dry-run policy check
 
 ${BOLD}RGB:${RESET}
   oikos rgb assets|issue|transfer        RGB asset operations
@@ -889,15 +793,6 @@ async function main() {
             case 'send':
                 await cmdPay();
                 break;
-            case 'swap':
-                await cmdSwap();
-                break;
-            case 'bridge':
-                await cmdBridge();
-                break;
-            case 'yield':
-                await cmdYield();
-                break;
             case 'status':
             case 'policies':
                 await cmdStatus();
@@ -929,13 +824,6 @@ async function main() {
                 break;
             case 'settle':
                 await cmdSettle();
-                break;
-            case 'identity':
-            case 'id':
-                await cmdIdentity();
-                break;
-            case 'prices':
-                await cmdPrices();
                 break;
             case 'rgb':
                 await cmdRgb();

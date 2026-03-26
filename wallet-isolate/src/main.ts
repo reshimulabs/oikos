@@ -28,16 +28,8 @@ import type {
   BalanceQuery,
   AddressQuery,
   AuditQuery,
-  IdentityRegisterRequest,
-  IdentitySetWalletRequest,
-  ReputationQuery,
-  FeedbackReadQuery,
-  ClientsQuery,
-  AppendResponseRequest,
-  SetMetadataRequest,
   SparkInvoiceRequest,
   SparkPayInvoiceRequest,
-  X402SignRequest,
 } from './ipc/types.js';
 
 /** BigInt-safe JSON serializer — WDK Spark returns BigInt values that break JSON.stringify */
@@ -112,10 +104,6 @@ function createAuditAppender(): (line: string) => void {
 
 const PROPOSAL_TYPE_MAP: Record<string, string> = {
   'propose_payment': 'payment',
-  'propose_swap': 'swap',
-  'propose_bridge': 'bridge',
-  'propose_yield': 'yield',
-  'propose_feedback': 'feedback',
   'propose_rgb_issue': 'rgb_issue',
   'propose_rgb_transfer': 'rgb_transfer',
 };
@@ -206,93 +194,6 @@ async function handleRequest(
             id: request.id,
             type: 'audit_entries',
             payload: { entries }
-          };
-          break;
-        }
-
-        // ── ERC-8004 Identity & Reputation (bypass PolicyEngine) ──
-
-        case 'identity_register': {
-          const req = request.payload as IdentityRegisterRequest;
-          const result = await wallet.registerIdentity(req.chain, req.agentURI);
-          audit.logIdentityOperation('identity_register', result);
-          response = {
-            id: request.id,
-            type: 'identity_result',
-            payload: { status: result.success ? 'registered' : 'failed', agentId: result.agentId, txHash: result.txHash, error: result.error }
-          };
-          break;
-        }
-
-        case 'identity_set_wallet': {
-          const req = request.payload as IdentitySetWalletRequest;
-          const result = await wallet.setAgentWallet(req.chain, req.agentId, req.deadline);
-          audit.logIdentityOperation('identity_set_wallet', result);
-          response = {
-            id: request.id,
-            type: 'identity_result',
-            payload: { status: result.success ? 'wallet_set' : 'failed', txHash: result.txHash, error: result.error }
-          };
-          break;
-        }
-
-        case 'query_reputation': {
-          const req = request.payload as ReputationQuery;
-          const rep = await wallet.getOnChainReputation(req.chain, req.agentId, {
-            clients: req.clientAddresses,
-            tag1: req.tag1,
-            tag2: req.tag2,
-          });
-          response = {
-            id: request.id,
-            type: 'reputation_result',
-            payload: { agentId: req.agentId, feedbackCount: rep.feedbackCount, totalValue: rep.totalValue, valueDecimals: rep.valueDecimals }
-          };
-          break;
-        }
-
-        case 'query_feedback': {
-          const req = request.payload as FeedbackReadQuery;
-          const fb = await wallet.readFeedback(req.chain, req.agentId, req.clientAddress, req.feedbackIndex);
-          response = {
-            id: request.id,
-            type: 'feedback_read',
-            payload: { agentId: req.agentId, clientAddress: req.clientAddress, feedbackIndex: req.feedbackIndex, ...fb },
-          };
-          break;
-        }
-
-        case 'query_clients': {
-          const req = request.payload as ClientsQuery;
-          const clients = await wallet.getClients(req.chain, req.agentId);
-          response = {
-            id: request.id,
-            type: 'clients_result',
-            payload: { agentId: req.agentId, clients },
-          };
-          break;
-        }
-
-        case 'identity_append_response': {
-          const req = request.payload as AppendResponseRequest;
-          const result = await wallet.appendResponse(req.chain, req.agentId, req.clientAddress, req.feedbackIndex, req.responseURI, req.responseHash);
-          audit.logIdentityOperation('identity_append_response', result);
-          response = {
-            id: request.id,
-            type: 'identity_result',
-            payload: { status: result.success ? 'registered' : 'failed', txHash: result.txHash, error: result.error },
-          };
-          break;
-        }
-
-        case 'identity_set_metadata': {
-          const req = request.payload as SetMetadataRequest;
-          const result = await wallet.setIdentityMetadata(req.chain, req.agentId, req.key, req.valueHex);
-          audit.logIdentityOperation('identity_set_metadata', result);
-          response = {
-            id: request.id,
-            type: 'identity_result',
-            payload: { status: result.success ? 'registered' : 'failed', txHash: result.txHash, error: result.error },
           };
           break;
         }
@@ -392,78 +293,6 @@ async function handleRequest(
             id: request.id,
             type: 'spark_transfers',
             payload: { transfers },
-          };
-          break;
-        }
-
-        // ── x402 EIP-712 Signing (policy-enforced) ──
-
-        case 'x402_sign': {
-          const req = request.payload as X402SignRequest;
-
-          // Policy check: treat x402 signing as a payment proposal
-          const fakeProposal: ProposalCommon = {
-            amount: req.policyAmount,
-            symbol: req.policySymbol,
-            chain: req.policyChain,
-            reason: `x402 EIP-3009 authorization to ${req.policyRecipient}`,
-            confidence: 0.95,
-            strategy: 'x402-auto-pay',
-            timestamp: Date.now(),
-          };
-
-          const policyResult = policy.evaluate(fakeProposal);
-          if (!policyResult.approved) {
-            audit.logPolicyEnforcement(fakeProposal, policyResult.violations, 'x402_sign', 'x402');
-            response = {
-              id: request.id,
-              type: 'x402_signature',
-              payload: { signature: '', error: `Policy rejected: ${policyResult.violations.join(', ')}`, approved: false },
-            };
-            break;
-          }
-
-          // Sign the typed data with WDK
-          const mgr = wallet as WalletManager;
-          if (typeof mgr.signTypedData !== 'function') {
-            response = { id: request.id, type: 'error', payload: { message: 'EVM typed data signing not available (mock wallet)' } };
-            break;
-          }
-
-          try {
-            const signature = await mgr.signTypedData({
-              domain: req.domain,
-              types: req.types,
-              message: req.message,
-            });
-
-            // Record execution in policy state + audit
-            policy.recordExecution(fakeProposal);
-            audit.logExecutionSuccess(fakeProposal, `sig:${signature.slice(0, 16)}...`, 'x402_sign', 'x402');
-
-            response = {
-              id: request.id,
-              type: 'x402_signature',
-              payload: { signature, approved: true },
-            };
-          } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Signing failed';
-            audit.logExecutionFailure(fakeProposal, message, 'x402_sign', 'x402');
-            response = {
-              id: request.id,
-              type: 'x402_signature',
-              payload: { signature: '', error: message, approved: false },
-            };
-          }
-          break;
-        }
-
-        case 'x402_get_address': {
-          const address = await wallet.getAddress('ethereum');
-          response = {
-            id: request.id,
-            type: 'x402_address',
-            payload: { address },
           };
           break;
         }

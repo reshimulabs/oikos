@@ -6,5 +6,4 @@
  */
 import type { ChainConfig } from './types.js';
 export declare const TESTNET_CHAINS: ChainConfig[];
-export declare const SEPOLIA_ONLY: ChainConfig[];
 //# sourceMappingURL=chains.d.ts.map

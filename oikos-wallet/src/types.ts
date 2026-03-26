@@ -7,9 +7,7 @@
 
 import type { WalletIPCClient } from './ipc/client.js';
 import type { EventBus } from './events/bus.js';
-import type { PricingService } from './pricing/client.js';
 import type { BrainAdapter, ChatMessage } from './brain/adapter.js';
-import type { X402Client } from './x402/client.js';
 import type { CompanionCoordinator } from './companion/coordinator.js';
 
 /** Swarm announcement posting options */
@@ -35,15 +33,6 @@ export interface SwarmInterface {
   }): boolean;
 }
 
-/** ERC-8004 identity state */
-export interface IdentityState {
-  registered: boolean;
-  agentId: string | null;
-  walletSet: boolean;
-  agentURI: string | null;
-  registrationTxHash: string | null;
-}
-
 /** Companion instruction (queued for any connected agent to read) */
 export interface CompanionInstruction {
   text: string;
@@ -56,24 +45,18 @@ export interface CompanionInstruction {
  */
 export interface OikosServices {
   wallet: WalletIPCClient;
-  pricing: PricingService | null;
   swarm: SwarmInterface | null;
   eventBus: EventBus | null;
-  identity: IdentityState;
   companionConnected: boolean;
   instructions: CompanionInstruction[];
   /** Brain adapter for chat (agent-agnostic) */
   brain: BrainAdapter | null;
   /** Chat conversation history */
   chatMessages: ChatMessage[];
-  /** x402 machine payment client */
-  x402: X402Client | null;
   /** Spark/Lightning wallet enabled */
   sparkEnabled: boolean;
   /** Passphrase authentication module */
   auth: import('./auth/passphrase.js').PassphraseAuth | null;
   /** Companion coordinator for Pear app ↔ agent bridging */
   companion: CompanionCoordinator | null;
-  /** ERC-8004 Reputation Bridge — auto-feedback after settlements */
-  reputationBridge: import('./reputation/bridge.js').ReputationBridge | null;
 }

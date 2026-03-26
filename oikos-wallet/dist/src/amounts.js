@@ -8,10 +8,7 @@
 /** Token decimal places — must match wallet-isolate/src/wallet/manager.ts */
 const DECIMALS = {
     USDT: 6,
-    XAUT: 6,
-    USAT: 6,
     BTC: 8,
-    ETH: 18,
     RGB: 6,
 };
 /** Get decimal places for a token */

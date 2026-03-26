@@ -12,7 +12,7 @@ function makeProposal(): PaymentProposal {
     to: '0x1234567890abcdef1234567890abcdef12345678',
     amount: '1000000',
     symbol: 'USDT',
-    chain: 'ethereum',
+    chain: 'bitcoin',
     reason: 'Test tip',
     confidence: 0.85,
     strategy: 'test',
