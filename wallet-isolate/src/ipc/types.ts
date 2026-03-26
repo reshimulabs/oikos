@@ -106,6 +106,7 @@ export type IPCRequestType =
   | 'query_policy'
   | 'query_audit'
   | 'query_rgb_assets'
+  | 'query_rgb_balance'
   | 'query_policy_check'
   | 'spark_create_invoice'
   | 'spark_pay_invoice'
@@ -174,6 +175,7 @@ export type IPCResponseType =
   | 'policy_status'
   | 'audit_entries'
   | 'rgb_assets'
+  | 'rgb_balance'
   | 'policy_check'
   | 'spark_invoice'
   | 'spark_pay_result'
@@ -225,7 +227,7 @@ const VALID_REQUEST_TYPES: ReadonlySet<string> = new Set([
   'propose_payment',
   'propose_rgb_issue', 'propose_rgb_transfer',
   'query_balance', 'query_balance_all', 'query_address', 'query_policy', 'query_audit',
-  'query_rgb_assets', 'query_policy_check',
+  'query_rgb_assets', 'query_rgb_balance', 'query_policy_check',
   'spark_create_invoice', 'spark_pay_invoice', 'spark_deposit_address', 'spark_get_transfers',
 ]);
 
@@ -266,7 +268,8 @@ export function validateIPCRequest(raw: unknown): IPCRequest | null {
       if (!validateRGBTransferProposal(payload)) return null;
       break;
     case 'query_rgb_assets':
-      break; // No payload validation needed
+    case 'query_rgb_balance':
+      break; // No payload validation needed (optional assetId filter)
     case 'query_policy_check':
       // Dry-run: validate that the payload is a valid proposal (any type)
       if (!validateProposalCommon(payload)) return null;

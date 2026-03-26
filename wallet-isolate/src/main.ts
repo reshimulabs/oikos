@@ -228,6 +228,18 @@ async function handleRequest(
           break;
         }
 
+        case 'query_rgb_balance': {
+          const allAssets = await wallet.rgbListAssets();
+          const targetAssetId = (request.payload as Record<string, unknown>)?.assetId as string | undefined;
+          const filtered = targetAssetId ? allAssets.filter(a => a.assetId === targetAssetId) : allAssets;
+          response = {
+            id: request.id,
+            type: 'rgb_balance',
+            payload: filtered,
+          };
+          break;
+        }
+
         // ── Spark/Lightning Operations ──
 
         case 'spark_create_invoice': {

@@ -70,18 +70,33 @@ interface SparkManager {
   dispose(): void;
 }
 
+/** RGB account interface — @utexo/wdk-wallet-rgb (WalletAccountRgb) */
+interface RgbAccount {
+  issueAssetNia(opts: { ticker: string; name: string; precision: number; amounts: number[] }): { assetId: string };
+  transfer(opts: { token: string; recipient: string; amount: number | bigint; feeRate?: number; minConfirmations?: number }): Promise<{ txid?: string }>;
+  receiveAsset(opts: { assetId?: string; amount: number; witness: boolean }): { invoice: string; recipientId?: string };
+  listAssets(): Array<{ assetId?: string; ticker?: string; name?: string; precision?: number; balance?: { settled?: number } }>;
+  refreshWallet(): void;
+}
+
+interface RgbManager {
+  getAccount(index?: number): Promise<RgbAccount>;
+}
+
 /**
  * WDK Wallet Manager — real implementation using @tetherto/wdk.
  *
  * Initializes WDK with the seed phrase and registers chain wallets.
  * Provides getAddress, getBalance, sendTransaction for BTC + Spark.
- * RGB operations are stubbed until wdk-wallet-rgb is wired (Step 2).
+ * RGB operations powered by @utexo/wdk-wallet-rgb (Spark-style init).
  */
 export class WalletManager implements WalletOperations {
   private wdk: WdkInstance | null = null;
   private sparkManager: SparkManager | null = null;
   private sparkAccount: SparkAccount | null = null;
   private sparkAddress: string = '';
+  private rgbManager: RgbManager | null = null;
+  private rgbAccount: RgbAccount | null = null;
   private initialized = false;
 
   /**
@@ -132,7 +147,21 @@ export class WalletManager implements WalletOperations {
           console.error('[wallet-isolate] Spark init failed:', err instanceof Error ? err.message : err);
         }
       }
-      // RGB chain registration will be added in Step 2 (wdk-wallet-rgb)
+      else if (config.chain === 'rgb') {
+        try {
+          const { default: WalletManagerRgb } = await import('@utexo/wdk-wallet-rgb');
+          const network = (config.network || 'testnet') as 'mainnet' | 'testnet' | 'regtest';
+          const rgbConfig: Record<string, unknown> = { network };
+          if (config.indexerUrl) rgbConfig.indexerUrl = config.indexerUrl;
+          if (config.dataDir) rgbConfig.dataDir = config.dataDir;
+          if (config.transportEndpoint) rgbConfig.transportEndpoint = config.transportEndpoint;
+          this.rgbManager = new WalletManagerRgb(seed, rgbConfig as { network: typeof network }) as unknown as RgbManager;
+          this.rgbAccount = await this.rgbManager.getAccount();
+          console.error(`[wallet-isolate] RGB chain module initialized (${network})`);
+        } catch (err) {
+          console.error('[wallet-isolate] RGB init failed:', err instanceof Error ? err.message : err);
+        }
+      }
     }
 
     this.wdk = wdk as unknown as WdkInstance;
@@ -238,23 +267,63 @@ export class WalletManager implements WalletOperations {
   }
 
   // ── RGB Asset Operations ──
-  // Real WDK RGB integration via @utexo/wdk-wallet-rgb (Step 2).
-  // These stubs return errors until the RGB module is registered.
+  // Powered by @utexo/wdk-wallet-rgb — initialized in the chain loop above.
 
-  async rgbIssueAsset(_ticker: string, _name: string, _supply: bigint, _precision: number): Promise<TransactionResult & { assetId?: string }> {
-    return { success: false, error: 'RGB wallet module not configured. Set RGB_ENABLED=true.' };
+  async rgbIssueAsset(ticker: string, name: string, supply: bigint, precision: number): Promise<TransactionResult & { assetId?: string }> {
+    if (!this.rgbAccount) {
+      return { success: false, error: 'RGB wallet module not configured.' };
+    }
+    try {
+      const nia = this.rgbAccount.issueAssetNia({
+        ticker, name, precision, amounts: [Number(supply)],
+      });
+      return { success: true, assetId: nia.assetId };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'RGB issue failed';
+      return { success: false, error: message };
+    }
   }
 
-  async rgbTransfer(_invoice: string, _amount: bigint, _assetId: string): Promise<TransactionResult> {
-    return { success: false, error: 'RGB wallet module not configured. Set RGB_ENABLED=true.' };
+  async rgbTransfer(invoice: string, amount: bigint, assetId: string): Promise<TransactionResult> {
+    if (!this.rgbAccount) {
+      return { success: false, error: 'RGB wallet module not configured.' };
+    }
+    try {
+      const result = await this.rgbAccount.transfer({
+        recipient: invoice,
+        token: assetId,
+        amount: Number(amount),
+        minConfirmations: 1,
+      });
+      return { success: true, txHash: result.txid || '' };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'RGB transfer failed';
+      return { success: false, error: message };
+    }
   }
 
-  async rgbReceiveAsset(_assetId?: string): Promise<{ invoice: string; recipientId: string }> {
-    throw new Error('RGB wallet module not configured. Set RGB_ENABLED=true.');
+  async rgbReceiveAsset(assetId?: string): Promise<{ invoice: string; recipientId: string }> {
+    if (!this.rgbAccount) {
+      throw new Error('RGB wallet module not configured.');
+    }
+    const inv = this.rgbAccount.receiveAsset({
+      ...(assetId ? { assetId } : {}),
+      amount: 0,       // 0 = open amount (receiver doesn't fix the amount)
+      witness: true,    // witness-based receive — no pre-existing UTXOs needed
+    });
+    return { invoice: inv.invoice, recipientId: inv.recipientId || '' };
   }
 
   async rgbListAssets(): Promise<Array<{ assetId: string; ticker: string; name: string; precision: number; balance: string }>> {
-    return [];
+    if (!this.rgbAccount) return [];
+    const assets = this.rgbAccount.listAssets();
+    return assets.map(a => ({
+      assetId: a.assetId || '',
+      ticker: a.ticker || '',
+      name: a.name || '',
+      precision: a.precision || 0,
+      balance: String(a.balance?.settled || 0),
+    }));
   }
 
   // ── Spark Lightning Operations ──
