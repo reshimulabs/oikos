@@ -20,11 +20,13 @@ import type {
   VerifyDisclosureResult,
   TierResult,
   EsploraClient,
+  SwarmAttestation,
 } from 'rgb-a-node';
 
 import {
   sign,
   sha256,
+  generateKeypair,
   RgbASwarm,
   createIdentity,
   createReputationStore,
@@ -48,6 +50,7 @@ export interface RgbAManagerOpts {
   storagePath: string;
   esploraUrl: string;
   dht?: unknown;
+  skipWasm?: boolean;
 }
 
 export class RgbAManager {
@@ -65,40 +68,82 @@ export class RgbAManager {
     this.swarm = new RgbASwarm(opts.dht ? { dht: opts.dht } : undefined);
 
     // Create identity (AgentCard + SwarmAttestation via witness quorum)
-    // Use quorumTarget: 0 to skip quorum for initial bootstrap (single agent)
-    this.identity = await createIdentity(this.swarm, {
-      quorumTarget: 0,
-    });
+    // Use quorumTarget: 0 to skip quorum for initial bootstrap (single agent).
+    // The attestation module's quorum-check only runs inside the onResponse
+    // handler, so quorumTarget: 0 times out instead of resolving immediately.
+    // Work around by using a short timeout and building a self-attestation
+    // when no peers are available.
+    try {
+      this.identity = await createIdentity(this.swarm, {
+        quorumTarget: 0,
+        timeoutMs: 500,
+      });
+    } catch {
+      // Self-attest: build identity components directly
+      const kp = opts.keypair ?? generateKeypair();
+      const now = Math.floor(Date.now() / 1000);
+      const card: AgentCard = {
+        pubkey: kp.publicKey,
+        card_hash: new Uint8Array(32),
+        attestation_hash: new Uint8Array(32),
+        created_at: now,
+        swarm_topics: Array.from({ length: 8 }, () => new Uint8Array(32)),
+        commitment_cadence: 50,
+        bond_txid: new Uint8Array(32),
+        bond_vout: 0,
+        bond_amount: 0,
+      };
+      const selfAttestation: SwarmAttestation = {
+        subject_hash: sha256(kp.publicKey),
+        attestation_type: 1 as const,
+        timestamp: now,
+        expires_at: now + 90 * 24 * 60 * 60,
+        expires_at_tx: 500,
+        is_renewal: false,
+        previous_hash: new Uint8Array(32),
+        quorum_size: 0,
+        witnesses: [],
+      };
+      this.identity = {
+        publicKey: kp.publicKey,
+        secretKey: kp.secretKey,
+        card,
+        attestation: selfAttestation,
+      };
+    }
+
+    const identity = this.identity!;
 
     // Override with provided keypair for persistence (identity generates its own)
     if (opts.keypair) {
-      this.identity.publicKey = opts.keypair.publicKey;
-      this.identity.secretKey = opts.keypair.secretKey;
+      identity.publicKey = opts.keypair.publicKey;
+      identity.secretKey = opts.keypair.secretKey;
     }
 
     // Create reputation store (Hypercore + Hyperbee)
     this.store = await createReputationStore({
-      identitySecretKey: this.identity.secretKey,
-      agentPubkey: this.identity.publicKey,
+      identitySecretKey: identity.secretKey,
+      agentPubkey: identity.publicKey,
       storagePath: opts.storagePath,
+      skipWasm: opts.skipWasm ?? false,
     });
 
     // Register protocol handlers
     const agentKeypair = {
-      publicKey: this.identity.publicKey,
-      secretKey: this.identity.secretKey,
+      publicKey: identity.publicKey,
+      secretKey: identity.secretKey,
     };
 
     // Witness: respond to attestation requests from other agents
-    createWitnessHandler(this.swarm, agentKeypair);
+    createWitnessHandler(this.swarm!, agentKeypair);
 
     // Receipt exchange: countersign and store inbound receipts
-    createReceiptExchangeHandler(this.swarm, this.store, agentKeypair);
+    createReceiptExchangeHandler(this.swarm!, this.store, agentKeypair);
 
     // Disclosure: respond to disclosure requests
-    createDisclosureHandler(this.swarm, this.store);
+    createDisclosureHandler(this.swarm!, this.store);
 
-    return this.identity;
+    return identity;
   }
 
   /**
